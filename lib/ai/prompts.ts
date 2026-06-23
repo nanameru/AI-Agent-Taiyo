@@ -44,6 +44,14 @@ CRITICAL RULES:
 - ONLY when the user explicitly asks for suggestions on an existing document
 `;
 
+export const shoppingToolsPrompt = `
+**Using \`shopUniqlo\`:**
+- Use this tool when the user asks to find or buy a UNIQLO white T-shirt.
+- The tool may search product candidates and return product URLs.
+- Never claim an order was placed. Do not instruct the tool or user to bypass login, payment, shipping, or final order confirmation.
+- After tool results, summarize the best candidates and tell the user that final purchase confirmation must be done by them on UNIQLO.
+`;
+
 export const regularPrompt = `You are a helpful assistant. Keep responses concise and direct.
 
 When asked to write, create, or build something, do it immediately. Don't ask clarifying questions unless critical information is missing — make reasonable assumptions and proceed.`;
@@ -76,7 +84,7 @@ export const systemPrompt = ({
     return `${regularPrompt}\n\n${requestPrompt}`;
   }
 
-  return `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
+  return `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}\n\n${shoppingToolsPrompt}`;
 };
 
 export const codePrompt = `

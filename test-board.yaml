@@ -1,0 +1,19 @@
+version: 1
+project:
+  name: "AI-Agent-Taiyo"
+  test_command: "pnpm test"
+  repo: "nanameru/AI-Agent-Taiyo"
+
+source_roots: [app, lib, components, tests]
+
+cases:
+  - id: TC-001
+    title: "Browserbase UNIQLO購入支援ツール: 白いTシャツ候補を検索して購入確認前まで案内する"
+    feature: "Browserbase UNIQLO購入支援ツール"
+    scenario: "白いTシャツ候補を検索して購入確認前まで案内する"
+    status: done
+    priority: medium
+    type: regression
+    source: [lib/ai/tools/shop-uniqlo.ts]
+    test_file: "lib/ai/tools/shop-uniqlo.test.ts"
+    issues: [1]
