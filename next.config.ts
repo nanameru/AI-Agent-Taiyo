@@ -51,4 +51,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withBotId(nextConfig);
+export default process.env.NEXT_PUBLIC_DISABLE_BOTID === "1"
+  ? nextConfig
+  : withBotId(nextConfig);
