@@ -1,0 +1,19 @@
+version: 1
+project:
+  name: "AI-Agent-Taiyo"
+  test_command: "pnpm check"
+  repo: "nanameru/AI-Agent-Taiyo"
+
+source_roots: [app, lib, components, tests]
+
+cases:
+  - id: TC-001
+    title: "Brave Search反復ディープリサーチツールが検索差分から追加クエリを生成する"
+    feature: "Brave Search反復ディープリサーチ"
+    scenario: "ユーザーの検索クエリから最大5並列検索と最大5回の追加検索クエリ生成を行う"
+    status: todo
+    priority: high
+    type: integration
+    source: [lib/ai/tools/deep-research.ts, app/(chat)/api/chat/route.ts]
+    test_file: ""
+    issues: [3]

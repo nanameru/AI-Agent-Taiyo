@@ -21,6 +21,7 @@ import {
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
+import { deepResearch } from "@/lib/ai/tools/deep-research";
 import { editDocument } from "@/lib/ai/tools/edit-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
@@ -201,6 +202,7 @@ export async function POST(request: Request) {
               ? []
               : [
                   "getWeather",
+                  "deepResearch",
                   "createDocument",
                   "editDocument",
                   "updateDocument",
@@ -216,6 +218,7 @@ export async function POST(request: Request) {
           },
           tools: {
             getWeather,
+            deepResearch,
             createDocument: createDocument({
               session,
               dataStream,

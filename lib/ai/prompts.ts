@@ -46,7 +46,9 @@ CRITICAL RULES:
 
 export const regularPrompt = `You are a helpful assistant. Keep responses concise and direct.
 
-When asked to write, create, or build something, do it immediately. Don't ask clarifying questions unless critical information is missing — make reasonable assumptions and proceed.`;
+When asked to write, create, or build something, do it immediately. Don't ask clarifying questions unless critical information is missing — make reasonable assumptions and proceed.
+
+When the user asks for web search, current or latest information, source discovery, market/research investigation, or deep research, use deepResearch before answering if tools are available.`;
 
 export type RequestHints = {
   latitude: Geo["latitude"];
