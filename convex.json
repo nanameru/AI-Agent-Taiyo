@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/convex/schemas/convex.schema.json",
+  "functions": "convex",
+  "authKit": {
+    "dev": {
+      "configure": {
+        "redirectUris": ["http://localhost:3000/callback"],
+        "appHomepageUrl": "http://localhost:3000",
+        "corsOrigins": ["http://localhost:3000"]
+      },
+      "localEnvVars": {
+        "WORKOS_CLIENT_ID": "WORKOS_CLIENT_ID",
+        "WORKOS_API_KEY": "WORKOS_API_KEY",
+        "NEXT_PUBLIC_WORKOS_REDIRECT_URI": "NEXT_PUBLIC_WORKOS_REDIRECT_URI"
+      }
+    },
+    "preview": {
+      "configure": false,
+      "localEnvVars": false
+    },
+    "prod": {
+      "environmentType": "production",
+      "configure": false,
+      "localEnvVars": false
+    }
+  }
+}

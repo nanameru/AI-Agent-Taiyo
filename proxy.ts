@@ -1,3 +1,4 @@
+import { authkit, handleAuthkitHeaders } from "@workos-inc/authkit-nextjs";
 import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { guestRegex, isDevelopmentEnvironment } from "./lib/constants";
@@ -5,17 +6,48 @@ import { guestRegex, isDevelopmentEnvironment } from "./lib/constants";
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPlaywright = process.env.PLAYWRIGHT === "True";
+  const hasWorkOSConfig = Boolean(
+    process.env.WORKOS_CLIENT_ID &&
+      process.env.WORKOS_API_KEY &&
+      process.env.WORKOS_COOKIE_PASSWORD &&
+      process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI
+  );
+  const workos = hasWorkOSConfig
+    ? await authkit(request, {
+        redirectUri: process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
+      })
+    : null;
+
+  const next = () =>
+    workos
+      ? handleAuthkitHeaders(request, workos.headers)
+      : NextResponse.next();
+
+  const redirect = (url: string | URL) => {
+    if (workos) {
+      return handleAuthkitHeaders(request, workos.headers, {
+        redirect: url.toString(),
+      });
+    }
+
+    return NextResponse.redirect(url);
+  };
 
   if (pathname.startsWith("/ping")) {
     return new Response("pong", { status: 200 });
   }
 
   if (isPlaywright && ["/login", "/register"].includes(pathname)) {
-    return NextResponse.next();
+    return next();
   }
 
-  if (pathname.startsWith("/api/auth")) {
-    return NextResponse.next();
+  if (
+    pathname.startsWith("/api/auth") ||
+    pathname === "/callback" ||
+    pathname === "/sign-in" ||
+    pathname === "/sign-up"
+  ) {
+    return next();
   }
 
   const token = await getToken({
@@ -29,7 +61,7 @@ export async function proxy(request: NextRequest) {
   if (!token) {
     const redirectUrl = encodeURIComponent(new URL(request.url).pathname);
 
-    return NextResponse.redirect(
+    return redirect(
       new URL(`${base}/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
     );
   }
@@ -37,10 +69,10 @@ export async function proxy(request: NextRequest) {
   const isGuest = guestRegex.test(token?.email ?? "");
 
   if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
-    return NextResponse.redirect(new URL(`${base}/`, request.url));
+    return redirect(new URL(`${base}/`, request.url));
   }
 
-  return NextResponse.next();
+  return next();
 }
 
 export const config = {
@@ -50,6 +82,9 @@ export const config = {
     "/api/:path*",
     "/login",
     "/register",
+    "/callback",
+    "/sign-in",
+    "/sign-up",
 
     "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
   ],
