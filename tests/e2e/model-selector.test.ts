@@ -59,9 +59,10 @@ test.describe("Model Selector", () => {
       .first();
     await modelButton.click();
 
-    await expect(page.getByText("Available")).toBeVisible();
-    await expect(page.getByText("DeepSeek V3.2")).toBeVisible();
-    await expect(page.getByText("Kimi K2.5")).toBeVisible();
+    const availableGroup = page.getByLabel("Available");
+    await expect(availableGroup).toBeVisible();
+    await expect(availableGroup.getByText("DeepSeek V3.2")).toBeVisible();
+    await expect(availableGroup.getByText("Kimi K2.5")).toBeVisible();
   });
 
   test("can select a different model", async ({ page }) => {

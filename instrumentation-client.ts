@@ -1,10 +1,12 @@
 import { initBotId } from "botid/client/core";
 
-initBotId({
-  protect: [
-    {
-      path: "/api/chat",
-      method: "POST",
-    },
-  ],
-});
+if (process.env.NEXT_PUBLIC_DISABLE_BOTID !== "1") {
+  initBotId({
+    protect: [
+      {
+        path: "/api/chat",
+        method: "POST",
+      },
+    ],
+  });
+}
