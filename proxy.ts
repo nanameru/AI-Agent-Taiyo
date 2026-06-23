@@ -4,9 +4,14 @@ import { guestRegex, isDevelopmentEnvironment } from "./lib/constants";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isPlaywright = process.env.PLAYWRIGHT === "True";
 
   if (pathname.startsWith("/ping")) {
     return new Response("pong", { status: 200 });
+  }
+
+  if (isPlaywright && ["/login", "/register"].includes(pathname)) {
+    return NextResponse.next();
   }
 
   if (pathname.startsWith("/api/auth")) {
