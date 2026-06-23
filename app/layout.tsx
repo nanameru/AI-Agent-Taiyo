@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SessionProvider } from "next-auth/react";
+import { ConvexWorkOSProvider } from "@/components/providers/convex-workos-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
-import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://chat.vercel.ai"),
@@ -74,11 +75,13 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
-          <SessionProvider
-            basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}
-          >
-            <TooltipProvider>{children}</TooltipProvider>
-          </SessionProvider>
+          <ConvexWorkOSProvider>
+            <SessionProvider
+              basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}
+            >
+              <TooltipProvider>{children}</TooltipProvider>
+            </SessionProvider>
+          </ConvexWorkOSProvider>
         </ThemeProvider>
       </body>
     </html>

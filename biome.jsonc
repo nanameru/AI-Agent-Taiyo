@@ -15,6 +15,7 @@
       "!components/ai-elements",
       "!components/elements",
       "!components/ui",
+      "!convex/_generated",
       "!lib/utils.ts",
       "!hooks/use-mobile.ts"
     ]
@@ -33,7 +34,6 @@
         "useConsistentTypeDefinitions": "off"
       },
       "nursery": {
-        "noUnnecessaryConditions": "off",
         "useSortedClasses": "off"
       },
       "complexity": {

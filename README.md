@@ -69,3 +69,44 @@ pnpm dev
 ```
 
 Your app template should now be running on [localhost:3000](http://localhost:3000).
+
+## Convex and WorkOS AuthKit
+
+This fork adds a Convex backend and WorkOS AuthKit routes for Google sign-in.
+
+Run the Convex dev setup once to create the local Convex deployment, generate
+types, and write Convex URLs to `.env.local`:
+
+```bash
+CONVEX_AGENT_MODE=anonymous pnpm exec convex dev --once
+```
+
+Configure WorkOS for local development:
+
+1. In the WorkOS dashboard, enable Google as a social auth provider.
+2. Add `http://localhost:3000/callback` as an allowed redirect URI.
+3. Set the app logout URI to `http://localhost:3000`.
+4. Add the WorkOS values to `.env.local`:
+
+```bash
+WORKOS_CLIENT_ID="client_..."
+WORKOS_API_KEY="sk_test_..."
+WORKOS_COOKIE_PASSWORD="$(openssl rand -base64 24)"
+NEXT_PUBLIC_WORKOS_REDIRECT_URI="http://localhost:3000/callback"
+```
+
+Set the same WorkOS values on the Convex deployment:
+
+```bash
+pnpm exec convex env set WORKOS_CLIENT_ID "$WORKOS_CLIENT_ID"
+pnpm exec convex env set WORKOS_API_KEY "$WORKOS_API_KEY"
+```
+
+Then sync Convex again:
+
+```bash
+pnpm exec convex dev --once
+```
+
+The WorkOS callback is mounted at `/callback`, sign-in at `/sign-in`, and
+sign-up at `/sign-up`.
