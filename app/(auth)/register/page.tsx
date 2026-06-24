@@ -69,13 +69,13 @@ async function RegisterContent({ searchParams }: RegisterPageProps) {
       <div className="flex flex-col gap-3">
         {isConfigured ? (
           <Button asChild className="w-full justify-between" size="lg">
-            <Link href={signUpHref}>
+            <a href={signUpHref}>
               <span className="inline-flex items-center gap-2">
                 <UserPlusIcon className="size-4" />
                 WorkOS で会員登録
               </span>
               <ArrowRightIcon className="size-4" />
-            </Link>
+            </a>
           </Button>
         ) : (
           <Button className="w-full justify-between" disabled size="lg">

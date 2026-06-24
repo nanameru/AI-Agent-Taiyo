@@ -69,13 +69,13 @@ async function LoginContent({ searchParams }: LoginPageProps) {
       <div className="flex flex-col gap-3">
         {isConfigured ? (
           <Button asChild className="w-full justify-between" size="lg">
-            <Link href={signInHref}>
+            <a href={signInHref}>
               <span className="inline-flex items-center gap-2">
                 <KeyRoundIcon className="size-4" />
                 WorkOS でログイン
               </span>
               <ArrowRightIcon className="size-4" />
-            </Link>
+            </a>
           </Button>
         ) : (
           <Button className="w-full justify-between" disabled size="lg">
