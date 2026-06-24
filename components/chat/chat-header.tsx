@@ -5,6 +5,7 @@ import Link from "next/link";
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
+import { CodexConnectButton } from "./codex-connect-button";
 import { VercelIcon } from "./icons";
 import { VisibilitySelector, type VisibilityType } from "./visibility-selector";
 
@@ -50,19 +51,22 @@ function PureChatHeader({
         />
       )}
 
-      <Button
-        asChild
-        className="hidden rounded-lg bg-foreground px-4 text-background hover:bg-foreground/90 md:ml-auto md:flex"
-      >
-        <Link
-          href="https://vercel.com/templates/next.js/chatbot"
-          rel="noopener noreferrer"
-          target="_blank"
+      <div className="hidden items-center gap-2 md:ml-auto md:flex">
+        <CodexConnectButton />
+        <Button
+          asChild
+          className="rounded-lg bg-foreground px-4 text-background hover:bg-foreground/90"
         >
-          <VercelIcon size={16} />
-          Deploy with Vercel
-        </Link>
-      </Button>
+          <Link
+            href="https://vercel.com/templates/next.js/chatbot"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <VercelIcon size={16} />
+            Deploy with Vercel
+          </Link>
+        </Button>
+      </div>
     </header>
   );
 }
