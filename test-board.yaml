@@ -1,10 +1,10 @@
 version: 1
 project:
   name: "AI-Agent-Taiyo"
-  test_command: "pnpm test"
+  test_command: "pnpm check && pnpm exec tsc --noEmit --pretty false && pnpm build"
   repo: "nanameru/AI-Agent-Taiyo"
 
-source_roots: [app, lib, components, tests]
+source_roots: [app, components, convex, lib, tests]
 
 cases:
   - id: TC-001
@@ -14,7 +14,7 @@ cases:
     status: done
     priority: medium
     type: regression
-    source: [lib/ai/tools/shop-uniqlo.ts]
+    source: ["lib/ai/tools/shop-uniqlo.ts"]
     test_file: "lib/ai/tools/shop-uniqlo.test.ts"
     issues: [1]
   - id: TC-002
@@ -24,6 +24,17 @@ cases:
     status: todo
     priority: high
     type: integration
-    source: [lib/ai/tools/deep-research.ts, app/(chat)/api/chat/route.ts]
+    source: ["lib/ai/tools/deep-research.ts", "app/(chat)/api/chat/route.ts"]
     test_file: ""
     issues: [3]
+  - id: TC-003
+    title: "Codex LocalモデルでChatGPTログイン済みCodexを実行できる"
+    feature: "ChatGPTログイン済みCodex実行"
+    scenario: "Codex Localモデル選択時にローカルCodex SDK経由で応答する"
+    status: done
+    priority: high
+    type: integration
+    source: ["app/(chat)/api/chat/route.ts", "lib/ai/codex-local.ts", "lib/ai/models.ts"]
+    test_file: ""
+    issues: [9]
+    notes: "ローカルCodex実行はChatGPT認証済みの開発者環境に依存するため、CIでは pnpm check / tsc / pnpm build で統合経路の型とビルドを検証する。"

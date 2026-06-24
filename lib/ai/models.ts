@@ -1,4 +1,5 @@
 export const DEFAULT_CHAT_MODEL = "moonshotai/kimi-k2.5";
+export const CODEX_LOCAL_MODEL_ID = "openai/codex-local";
 
 export const titleModel = {
   id: "moonshotai/kimi-k2.5",
@@ -24,6 +25,13 @@ export type ChatModel = {
 };
 
 export const chatModels: ChatModel[] = [
+  {
+    id: CODEX_LOCAL_MODEL_ID,
+    name: "Codex Local",
+    provider: "openai",
+    description: "Runs local Codex with your ChatGPT login session",
+    reasoningEffort: "medium",
+  },
   {
     id: "deepseek/deepseek-v3.2",
     name: "DeepSeek V3.2",
@@ -68,6 +76,10 @@ export async function getCapabilities(): Promise<
 > {
   const results = await Promise.all(
     chatModels.map(async (model) => {
+      if (model.id === CODEX_LOCAL_MODEL_ID) {
+        return [model.id, { tools: false, vision: false, reasoning: true }];
+      }
+
       try {
         const res = await fetch(
           `https://ai-gateway.vercel.sh/v1/models/${model.id}/endpoints`,

@@ -6,11 +6,13 @@ import {
   generateId,
   stepCountIs,
   streamText,
+  type UIMessageStreamOnFinishCallback,
 } from "ai";
 import { checkBotId } from "botid/server";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { auth, type UserType } from "@/app/(auth)/auth";
+import { isCodexLocalModel, runCodexLocal } from "@/lib/ai/codex-local";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import {
   allowedModelIds,
@@ -190,6 +192,123 @@ export async function POST(request: Request) {
 
     const modelMessages = await convertToModelMessages(uiMessages);
 
+    const persistFinishedMessages: UIMessageStreamOnFinishCallback<
+      ChatMessage
+    > = async ({ messages: finishedMessages }) => {
+      if (isToolApprovalFlow) {
+        for (const finishedMsg of finishedMessages) {
+          const existingMsg = uiMessages.find((m) => m.id === finishedMsg.id);
+          if (existingMsg) {
+            await updateMessage({
+              id: finishedMsg.id,
+              parts: finishedMsg.parts,
+            });
+          } else {
+            await saveMessages({
+              messages: [
+                {
+                  id: finishedMsg.id,
+                  role: finishedMsg.role,
+                  parts: finishedMsg.parts,
+                  createdAt: new Date(),
+                  attachments: [],
+                  chatId: id,
+                },
+              ],
+            });
+          }
+        }
+      } else if (finishedMessages.length > 0) {
+        await saveMessages({
+          messages: finishedMessages.map((currentMessage) => ({
+            id: currentMessage.id,
+            role: currentMessage.role,
+            parts: currentMessage.parts,
+            createdAt: new Date(),
+            attachments: [],
+            chatId: id,
+          })),
+        });
+      }
+    };
+
+    if (isCodexLocalModel(chatModel)) {
+      const stream = createUIMessageStream<ChatMessage>({
+        execute: async ({ writer: dataStream }) => {
+          const textId = generateUUID();
+
+          dataStream.write({ type: "start" });
+          dataStream.write({ type: "start-step" });
+          dataStream.write({ type: "text-start", id: textId });
+
+          try {
+            const response = await runCodexLocal(uiMessages);
+            dataStream.write({
+              type: "text-delta",
+              id: textId,
+              delta: response,
+            });
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Unknown Codex local error";
+
+            dataStream.write({
+              type: "text-delta",
+              id: textId,
+              delta: [
+                "Codex Local failed to run.",
+                "",
+                message,
+                "",
+                "Check that `codex login` works in this shell and that `CODEX_LOCAL_MODE_ENABLED=1` is set for the Next.js server.",
+              ].join("\n"),
+            });
+          }
+
+          dataStream.write({ type: "text-end", id: textId });
+          dataStream.write({ type: "finish-step" });
+
+          if (titlePromise) {
+            try {
+              const title = await titlePromise;
+              dataStream.write({ type: "data-chat-title", data: title });
+              updateChatTitleById({ chatId: id, title });
+            } catch (_) {
+              /* non-fatal */
+            }
+          }
+
+          dataStream.write({ type: "finish" });
+        },
+        generateId: generateUUID,
+        onFinish: persistFinishedMessages,
+      });
+
+      return createUIMessageStreamResponse({
+        stream,
+        async consumeSseStream({ stream: sseStream }) {
+          if (!process.env.REDIS_URL) {
+            return;
+          }
+          try {
+            const streamContext = getStreamContext();
+            if (streamContext) {
+              const streamId = generateId();
+              await createStreamId({ streamId, chatId: id });
+              await streamContext.createNewResumableStream(
+                streamId,
+                () => sseStream
+              );
+            }
+          } catch (_) {
+            /* non-critical */
+          }
+        },
+      });
+    }
+
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
@@ -260,43 +379,7 @@ export async function POST(request: Request) {
         }
       },
       generateId: generateUUID,
-      onFinish: async ({ messages: finishedMessages }) => {
-        if (isToolApprovalFlow) {
-          for (const finishedMsg of finishedMessages) {
-            const existingMsg = uiMessages.find((m) => m.id === finishedMsg.id);
-            if (existingMsg) {
-              await updateMessage({
-                id: finishedMsg.id,
-                parts: finishedMsg.parts,
-              });
-            } else {
-              await saveMessages({
-                messages: [
-                  {
-                    id: finishedMsg.id,
-                    role: finishedMsg.role,
-                    parts: finishedMsg.parts,
-                    createdAt: new Date(),
-                    attachments: [],
-                    chatId: id,
-                  },
-                ],
-              });
-            }
-          }
-        } else if (finishedMessages.length > 0) {
-          await saveMessages({
-            messages: finishedMessages.map((currentMessage) => ({
-              id: currentMessage.id,
-              role: currentMessage.role,
-              parts: currentMessage.parts,
-              createdAt: new Date(),
-              attachments: [],
-              chatId: id,
-            })),
-          });
-        }
-      },
+      onFinish: persistFinishedMessages,
       onError: (error) => {
         if (
           error instanceof Error &&
