@@ -137,6 +137,9 @@ importers:
       papaparse:
         specifier: ^5.5.2
         version: 5.5.2
+      playwright-core:
+        specifier: 1.51.0
+        version: 1.51.0
       postgres:
         specifier: ^3.4.4
         version: 3.4.5

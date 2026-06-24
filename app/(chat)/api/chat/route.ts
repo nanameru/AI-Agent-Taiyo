@@ -24,6 +24,7 @@ import { createDocument } from "@/lib/ai/tools/create-document";
 import { editDocument } from "@/lib/ai/tools/edit-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
+import { shopUniqlo } from "@/lib/ai/tools/shop-uniqlo";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
@@ -205,6 +206,7 @@ export async function POST(request: Request) {
                   "editDocument",
                   "updateDocument",
                   "requestSuggestions",
+                  "shopUniqlo",
                 ],
           providerOptions: {
             ...(modelConfig?.gatewayOrder && {
@@ -232,6 +234,7 @@ export async function POST(request: Request) {
               dataStream,
               modelId: chatModel,
             }),
+            shopUniqlo,
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,

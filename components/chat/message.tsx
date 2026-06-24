@@ -301,6 +301,36 @@ const PurePreviewMessage = ({
       );
     }
 
+    if (type === "tool-shopUniqlo") {
+      const { toolCallId, state } = part;
+
+      return (
+        <Tool
+          className="w-[min(100%,560px)]"
+          defaultOpen={true}
+          key={toolCallId}
+        >
+          <ToolHeader
+            state={state}
+            title="UNIQLO shopping assistant"
+            type="tool-shopUniqlo"
+          />
+          <ToolContent>
+            {(state === "input-available" ||
+              state === "approval-requested") && (
+              <ToolInput input={part.input} />
+            )}
+            {state === "output-available" && (
+              <ToolOutput errorText={undefined} output={part.output} />
+            )}
+            {state === "output-error" && (
+              <ToolOutput errorText={part.errorText} output={undefined} />
+            )}
+          </ToolContent>
+        </Tool>
+      );
+    }
+
     return null;
   });
 
