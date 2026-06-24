@@ -57,6 +57,35 @@ export async function createUser(email: string, password: string) {
   }
 }
 
+export async function getOrCreateUserByEmail({ email }: { email: string }) {
+  try {
+    const [existingUser] = await db
+      .select({
+        id: user.id,
+        email: user.email,
+      })
+      .from(user)
+      .where(eq(user.email, email))
+      .limit(1);
+
+    if (existingUser) {
+      return existingUser;
+    }
+
+    const [createdUser] = await db.insert(user).values({ email }).returning({
+      id: user.id,
+      email: user.email,
+    });
+
+    return createdUser;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get or create user by email"
+    );
+  }
+}
+
 export async function createGuestUser() {
   const email = `guest-${Date.now()}`;
   const password = generateHashedPassword(generateUUID());

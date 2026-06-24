@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { auth } from "@/app/(auth)/auth";
+import { getAppSession } from "@/app/(auth)/session";
 import { deleteAllChatsByUserId, getChatsByUserId } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     ).toResponse();
   }
 
-  const session = await auth();
+  const session = await getAppSession();
 
   if (!session?.user) {
     return new ChatbotError("unauthorized:chat").toResponse();
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE() {
-  const session = await auth();
+  const session = await getAppSession();
 
   if (!session?.user) {
     return new ChatbotError("unauthorized:chat").toResponse();

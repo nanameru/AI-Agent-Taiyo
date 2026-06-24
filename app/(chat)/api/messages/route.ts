@@ -1,4 +1,4 @@
-import { auth } from "@/app/(auth)/auth";
+import { getAppSession } from "@/app/(auth)/session";
 import { getChatById, getMessagesByChatId } from "@/lib/db/queries";
 import { convertToUIMessages } from "@/lib/utils";
 
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   }
 
   const [session, chat, messages] = await Promise.all([
-    auth(),
+    getAppSession(),
     getChatById({ id: chatId }),
     getMessagesByChatId({ id: chatId }),
   ]);

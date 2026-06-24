@@ -11,7 +11,8 @@ import {
 import { checkBotId } from "botid/server";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
-import { auth, type UserType } from "@/app/(auth)/auth";
+import type { UserType } from "@/app/(auth)/auth";
+import { getAppSession } from "@/app/(auth)/session";
 import { isCodexLocalModel, runCodexLocal } from "@/lib/ai/codex-local";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import {
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
 
     const [, session] = await Promise.all([
       checkBotId().catch(() => null),
-      auth(),
+      getAppSession(),
     ]);
 
     if (!session?.user) {
@@ -443,7 +444,7 @@ export async function DELETE(request: Request) {
     return new ChatbotError("bad_request:api").toResponse();
   }
 
-  const session = await auth();
+  const session = await getAppSession();
 
   if (!session?.user) {
     return new ChatbotError("unauthorized:chat").toResponse();
