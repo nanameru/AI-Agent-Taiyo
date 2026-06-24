@@ -33,6 +33,24 @@ export const chatModels: ChatModel[] = [
     reasoningEffort: "medium",
   },
   {
+    id: "anthropic/claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    provider: "anthropic",
+    description: "Anthropic balanced model for coding and analysis",
+  },
+  {
+    id: "anthropic/claude-opus-4-8",
+    name: "Claude Opus 4.8",
+    provider: "anthropic",
+    description: "Anthropic most capable model for complex reasoning",
+  },
+  {
+    id: "anthropic/claude-haiku-4-5-20251001",
+    name: "Claude Haiku 4.5",
+    provider: "anthropic",
+    description: "Anthropic fastest model with strong intelligence",
+  },
+  {
     id: "deepseek/deepseek-v3.2",
     name: "DeepSeek V3.2",
     provider: "deepseek",
@@ -78,6 +96,10 @@ export async function getCapabilities(): Promise<
     chatModels.map(async (model) => {
       if (model.id === CODEX_LOCAL_MODEL_ID) {
         return [model.id, { tools: false, vision: false, reasoning: true }];
+      }
+
+      if (model.provider === "anthropic") {
+        return [model.id, { tools: true, vision: true, reasoning: false }];
       }
 
       try {

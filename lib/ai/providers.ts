@@ -1,3 +1,4 @@
+import { anthropic } from "@ai-sdk/anthropic";
 import { customProvider, gateway } from "ai";
 import { isTestEnvironment } from "../constants";
 import { titleModel } from "./models";
@@ -17,6 +18,10 @@ export const myProvider = isTestEnvironment
 export function getLanguageModel(modelId: string) {
   if (isTestEnvironment && myProvider) {
     return myProvider.languageModel(modelId);
+  }
+
+  if (modelId.startsWith("anthropic/")) {
+    return anthropic(modelId.replace("anthropic/", ""));
   }
 
   return gateway.languageModel(modelId);
