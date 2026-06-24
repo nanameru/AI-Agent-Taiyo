@@ -46,6 +46,40 @@ This template uses the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) t
 
 With the [AI SDK](https://ai-sdk.dev/docs/introduction), you can also switch to direct LLM providers like [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com/), and [many more](https://ai-sdk.dev/providers/ai-sdk-providers) with just a few lines of code.
 
+### Local Codex with ChatGPT login
+
+This fork also includes an optional `Codex Local` model. It runs the server-side
+Codex SDK on the same machine as the Next.js server, so it can use the local
+Codex authentication created by `codex login`. When that login is a ChatGPT
+login, Codex usage follows the ChatGPT/Codex subscription and workspace
+entitlements for that local Codex session.
+
+This mode is local-only and should be used only on trusted developer machines.
+It does not let a deployed public web app bill normal AI Gateway or OpenAI API
+requests to a visitor's ChatGPT subscription, and it must not upload or store
+`~/.codex/auth.json`, Codex access tokens, or ChatGPT credentials.
+
+To enable it locally:
+
+```bash
+codex login
+CODEX_LOCAL_MODE_ENABLED=1 pnpm dev
+```
+
+Optional settings:
+
+```bash
+CODEX_LOCAL_MODEL=gpt-5.4
+CODEX_LOCAL_SANDBOX=read-only # read-only | workspace-write | danger-full-access
+CODEX_LOCAL_WORKDIR=/absolute/path/to/workspace
+CODEX_LOCAL_CODEX_HOME=/absolute/path/to/codex-home
+CODEX_LOCAL_NETWORK=0
+```
+
+If `codex login status` fails, fix the local Codex configuration first. For
+example, current Codex builds reject invalid config values before the SDK can
+start a local turn.
+
 ## Deploy Your Own
 
 You can deploy your own version of Chatbot to Vercel with one click:
