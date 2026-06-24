@@ -5,7 +5,15 @@ import { guestRegex, isDevelopmentEnvironment } from "./lib/constants";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isPlaywright = process.env.PLAYWRIGHT === "True";
+  const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  const isAuthPage = pathname === "/login" || pathname === "/register";
+  const isWorkOSRoute =
+    pathname === "/callback" ||
+    pathname === "/sign-in" ||
+    pathname === "/sign-up";
+  const isAuthApiRoute = pathname.startsWith("/api/auth");
+  const isApiRoute = pathname.startsWith("/api/");
+  const isProtectedPage = pathname === "/" || pathname.startsWith("/chat/");
   const hasWorkOSConfig = Boolean(
     process.env.WORKOS_CLIENT_ID &&
       process.env.WORKOS_API_KEY &&
@@ -37,16 +45,7 @@ export async function proxy(request: NextRequest) {
     return new Response("pong", { status: 200 });
   }
 
-  if (isPlaywright && ["/login", "/register"].includes(pathname)) {
-    return next();
-  }
-
-  if (
-    pathname.startsWith("/api/auth") ||
-    pathname === "/callback" ||
-    pathname === "/sign-in" ||
-    pathname === "/sign-up"
-  ) {
+  if (isAuthApiRoute || isWorkOSRoute) {
     return next();
   }
 
@@ -58,6 +57,24 @@ export async function proxy(request: NextRequest) {
   }
 
   if (workos) {
+    if (workos.session.user && isAuthPage) {
+      return redirect(new URL(`${base}/`, request.url));
+    }
+
+    if (isProtectedPage && !workos.session.user) {
+      const redirectUrl = encodeURIComponent(
+        `${request.nextUrl.pathname}${request.nextUrl.search}`
+      );
+
+      return redirect(
+        new URL(`${base}/login?redirectUrl=${redirectUrl}`, request.url)
+      );
+    }
+
+    return next();
+  }
+
+  if (isApiRoute) {
     return next();
   }
 
@@ -67,20 +84,20 @@ export async function proxy(request: NextRequest) {
     secureCookie: !isDevelopmentEnvironment,
   });
 
-  const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-
-  if (!token) {
-    const redirectUrl = encodeURIComponent(new URL(request.url).pathname);
-
-    return redirect(
-      new URL(`${base}/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
-    );
-  }
-
   const isGuest = guestRegex.test(token?.email ?? "");
 
-  if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
+  if (token && !isGuest && isAuthPage) {
     return redirect(new URL(`${base}/`, request.url));
+  }
+
+  if (isProtectedPage && (!token || isGuest)) {
+    const redirectUrl = encodeURIComponent(
+      `${request.nextUrl.pathname}${request.nextUrl.search}`
+    );
+
+    return redirect(
+      new URL(`${base}/login?redirectUrl=${redirectUrl}`, request.url)
+    );
   }
 
   return next();

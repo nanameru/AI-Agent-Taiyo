@@ -1,5 +1,6 @@
 import { getSignUpUrl } from "@workos-inc/authkit-nextjs";
 import { redirect } from "next/navigation";
+import type { NextRequest } from "next/server";
 
 const hasWorkOSConfig = Boolean(
   process.env.WORKOS_CLIENT_ID &&
@@ -8,10 +9,22 @@ const hasWorkOSConfig = Boolean(
     process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI
 );
 
-export async function GET() {
-  if (!hasWorkOSConfig) {
-    return new Response("WorkOS sign-up is not configured.", { status: 200 });
+function getSafeReturnTo(value: string | null) {
+  if (!value?.startsWith("/") || value.startsWith("//")) {
+    return "/";
   }
 
-  redirect(await getSignUpUrl());
+  return value;
+}
+
+export async function GET(request: NextRequest) {
+  if (!hasWorkOSConfig) {
+    redirect("/register?config=missing");
+  }
+
+  const returnTo = getSafeReturnTo(
+    request.nextUrl.searchParams.get("returnTo")
+  );
+
+  redirect(await getSignUpUrl({ returnTo }));
 }
