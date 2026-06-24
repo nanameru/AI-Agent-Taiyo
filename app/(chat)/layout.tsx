@@ -1,4 +1,5 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Script from "next/script";
 import { Suspense } from "react";
 import { Toaster } from "sonner";
@@ -8,6 +9,19 @@ import { ChatShell } from "@/components/chat/shell";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ActiveChatProvider } from "@/hooks/use-active-chat";
 import { getAppSession } from "../(auth)/session";
+
+function getRedirectPath(value: string | null) {
+  if (!value) {
+    return "/";
+  }
+
+  try {
+    const url = new URL(value);
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return "/";
+  }
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -26,10 +40,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 }
 
 async function SidebarShell({ children }: { children: React.ReactNode }) {
-  const [session, cookieStore] = await Promise.all([
+  const [session, cookieStore, headerStore] = await Promise.all([
     getAppSession(),
     cookies(),
+    headers(),
   ]);
+
+  if (!session?.user) {
+    const redirectPath = getRedirectPath(headerStore.get("x-url"));
+    redirect(`/login?redirectUrl=${encodeURIComponent(redirectPath)}`);
+  }
+
   const isCollapsed = cookieStore.get("sidebar_state")?.value !== "true";
 
   return (
