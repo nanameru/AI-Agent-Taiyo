@@ -9,10 +9,25 @@ jobs:
   test:
     timeout-minutes: 30
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chatbot
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     env:
-      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-      BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
-      POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+      AUTH_SECRET: test-secret-for-playwright
+      AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_DISABLE_BOTID: "1"
+      POSTGRES_URL: postgres://postgres:postgres@localhost:5432/chatbot
       BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
       REDIS_URL: ${{ secrets.REDIS_URL }}
 
@@ -52,16 +67,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v3
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/pnpm-lock.yaml') }}
+      - name: Run database migrations
+        run: pnpm db:migrate
 
-      - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright dependencies
+        run: pnpm exec playwright install-deps chromium
 
       - name: Run Playwright tests
         run: pnpm test

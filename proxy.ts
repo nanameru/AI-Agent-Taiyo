@@ -5,6 +5,7 @@ import { guestRegex, isDevelopmentEnvironment } from "./lib/constants";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isPlaywright = process.env.PLAYWRIGHT === "True";
   const hasWorkOSConfig = Boolean(
     process.env.WORKOS_CLIENT_ID &&
       process.env.WORKOS_API_KEY &&
@@ -34,6 +35,10 @@ export async function proxy(request: NextRequest) {
 
   if (pathname.startsWith("/ping")) {
     return new Response("pong", { status: 200 });
+  }
+
+  if (isPlaywright && ["/login", "/register"].includes(pathname)) {
+    return next();
   }
 
   if (

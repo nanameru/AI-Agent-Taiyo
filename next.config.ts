@@ -1,6 +1,7 @@
-import { withBotId } from "botid/next/config";
+import { createRequire } from "node:module";
 import type { NextConfig } from "next";
 
+const require = createRequire(import.meta.url);
 const basePath = process.env.IS_DEMO === "1" ? "/demo" : "";
 
 const nextConfig: NextConfig = {
@@ -51,4 +52,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withBotId(nextConfig);
+let config = nextConfig;
+
+if (process.env.NEXT_PUBLIC_DISABLE_BOTID !== "1") {
+  const { withBotId } =
+    require("botid/next/config") as typeof import("botid/next/config");
+  config = withBotId(nextConfig);
+}
+
+export default config;

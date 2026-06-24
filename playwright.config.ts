@@ -56,6 +56,7 @@ export default defineConfig({
       testMatch: /e2e\/.*.test.ts/,
       use: {
         ...devices["Desktop Chrome"],
+        ...(process.env.CI ? { channel: "chrome" } : {}),
       },
     },
 
