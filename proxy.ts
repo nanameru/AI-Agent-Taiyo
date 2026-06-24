@@ -45,6 +45,17 @@ export async function proxy(request: NextRequest) {
     return next();
   }
 
+  if (
+    isDevelopmentEnvironment &&
+    process.env.LOCAL_PREVIEW_AUTH_BYPASS === "1"
+  ) {
+    return next();
+  }
+
+  if (workos) {
+    return next();
+  }
+
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,

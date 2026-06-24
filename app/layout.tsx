@@ -54,6 +54,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const hasWorkOSConfig = Boolean(
+    process.env.WORKOS_CLIENT_ID &&
+      process.env.WORKOS_API_KEY &&
+      process.env.WORKOS_COOKIE_PASSWORD &&
+      process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI
+  );
+
+  const app = (
+    <SessionProvider
+      basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}
+    >
+      <TooltipProvider>{children}</TooltipProvider>
+    </SessionProvider>
+  );
+
   return (
     <html
       className={`${geist.variable} ${geistMono.variable}`}
@@ -75,13 +90,11 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
-          <ConvexWorkOSProvider>
-            <SessionProvider
-              basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}
-            >
-              <TooltipProvider>{children}</TooltipProvider>
-            </SessionProvider>
-          </ConvexWorkOSProvider>
+          {hasWorkOSConfig ? (
+            <ConvexWorkOSProvider>{app}</ConvexWorkOSProvider>
+          ) : (
+            app
+          )}
         </ThemeProvider>
       </body>
     </html>

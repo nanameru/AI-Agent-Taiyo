@@ -4,9 +4,12 @@
   "authKit": {
     "dev": {
       "configure": {
-        "redirectUris": ["http://localhost:3000/callback"],
-        "appHomepageUrl": "http://localhost:3000",
-        "corsOrigins": ["http://localhost:3000"]
+        "redirectUris": [
+          "http://localhost:3000/callback",
+          "http://localhost:3002/callback"
+        ],
+        "appHomepageUrl": "http://localhost:3002",
+        "corsOrigins": ["http://localhost:3000", "http://localhost:3002"]
       },
       "localEnvVars": {
         "WORKOS_CLIENT_ID": "WORKOS_CLIENT_ID",
