@@ -24,6 +24,14 @@ function hasWorkOSConfig() {
   );
 }
 
+function isUuid(value: string | undefined) {
+  return Boolean(
+    value?.match(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    )
+  );
+}
+
 function getWorkOSDisplayName(user: {
   email?: string | null;
   firstName?: string | null;
@@ -38,7 +46,26 @@ export async function getAppSession(): Promise<AppSession> {
   const nextAuthSession = await auth();
 
   if (nextAuthSession?.user) {
-    return nextAuthSession;
+    if (isUuid(nextAuthSession.user.id)) {
+      return nextAuthSession;
+    }
+
+    if (nextAuthSession.user.email) {
+      const localUser = await getOrCreateUserByEmail({
+        email: nextAuthSession.user.email,
+      });
+
+      return {
+        user: {
+          id: localUser.id,
+          email: localUser.email,
+          name: nextAuthSession.user.name,
+          image: nextAuthSession.user.image,
+          type: nextAuthSession.user.type ?? "regular",
+        },
+        expires: nextAuthSession.expires,
+      };
+    }
   }
 
   if (!hasWorkOSConfig()) {
