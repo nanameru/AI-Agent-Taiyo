@@ -143,7 +143,7 @@ function PureMultimodalInput({
     const val = event.target.value;
     setInput(val);
 
-    if (val.startsWith("/") && !val.includes(" ")) {
+    if (val.startsWith("/") && !val.trimStart().includes(" ")) {
       setSlashOpen(true);
       setSlashQuery(val.slice(1));
       setSlashIndex(0);
@@ -154,7 +154,22 @@ function PureMultimodalInput({
 
   const handleSlashSelect = (cmd: SlashCommand) => {
     setSlashOpen(false);
+
+    if (cmd.action === "prompt") {
+      const nextInput = cmd.prompt ?? `/${cmd.name} `;
+      setInput(nextInput);
+      setLocalStorageInput(nextInput);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        const position = nextInput.length;
+        textareaRef.current?.setSelectionRange(position, position);
+      });
+      return;
+    }
+
     setInput("");
+    setLocalStorageInput("");
+
     switch (cmd.action) {
       case "new":
         router.push("/");
@@ -209,52 +224,78 @@ function PureMultimodalInput({
     }
   };
 
+  const getSlashCommandPrompt = (value: string) => {
+    const trimmed = value.trim();
+
+    if (!trimmed.startsWith("/")) {
+      return null;
+    }
+
+    const [commandToken, ...restTokens] = trimmed.slice(1).split(/\s+/);
+    const command = slashCommands.find((cmd) => cmd.name === commandToken);
+
+    if (!(command?.action === "prompt" && command.toPrompt)) {
+      return null;
+    }
+
+    const commandInput = restTokens.join(" ").trim();
+
+    if (!commandInput) {
+      return { command, text: null };
+    }
+
+    return { command, text: command.toPrompt(commandInput) };
+  };
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<string[]>([]);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
 
-  const submitForm = useCallback(() => {
-    window.history.pushState(
-      {},
-      "",
-      `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/chat/${chatId}`
-    );
+  const submitForm = useCallback(
+    (messageText = input) => {
+      window.history.pushState(
+        {},
+        "",
+        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/chat/${chatId}`
+      );
 
-    sendMessage({
-      role: "user",
-      parts: [
-        ...attachments.map((attachment) => ({
-          type: "file" as const,
-          url: attachment.url,
-          name: attachment.name,
-          mediaType: attachment.contentType,
-        })),
-        {
-          type: "text",
-          text: input,
-        },
-      ],
-    });
+      sendMessage({
+        role: "user",
+        parts: [
+          ...attachments.map((attachment) => ({
+            type: "file" as const,
+            url: attachment.url,
+            name: attachment.name,
+            mediaType: attachment.contentType,
+          })),
+          {
+            type: "text",
+            text: messageText,
+          },
+        ],
+      });
 
-    setAttachments([]);
-    setLocalStorageInput("");
-    setInput("");
+      setAttachments([]);
+      setLocalStorageInput("");
+      setInput("");
 
-    if (width && width > 768) {
-      textareaRef.current?.focus();
-    }
-  }, [
-    input,
-    setInput,
-    attachments,
-    sendMessage,
-    setAttachments,
-    setLocalStorageInput,
-    width,
-    chatId,
-  ]);
+      if (width && width > 768) {
+        textareaRef.current?.focus();
+      }
+    },
+    [
+      input,
+      setInput,
+      attachments,
+      sendMessage,
+      setAttachments,
+      setLocalStorageInput,
+      width,
+      chatId,
+    ]
+  );
 
   const uploadFile = useCallback(async (file: File) => {
     const formData = new FormData();
@@ -422,8 +463,24 @@ function PureMultimodalInput({
         className="[&>div]:rounded-2xl [&>div]:border [&>div]:border-border/30 [&>div]:bg-card/70 [&>div]:shadow-[var(--shadow-composer)] [&>div]:transition-shadow [&>div]:duration-300 [&>div]:focus-within:shadow-[var(--shadow-composer-focus)]"
         onSubmit={() => {
           if (input.startsWith("/")) {
+            const slashPrompt = getSlashCommandPrompt(input);
+
+            if (slashPrompt?.text) {
+              if (status === "ready" || status === "error") {
+                submitForm(slashPrompt.text);
+              } else {
+                toast.error(
+                  "Please wait for the model to finish its response!"
+                );
+              }
+              return;
+            }
+
             const query = input.slice(1).trim();
-            const cmd = slashCommands.find((c) => c.name === query);
+            const cmd =
+              slashPrompt?.command ??
+              slashCommands.find((c) => c.name === query);
+
             if (cmd) {
               handleSlashSelect(cmd);
             }

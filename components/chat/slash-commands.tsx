@@ -2,10 +2,13 @@
 
 import {
   BombIcon,
+  FileSearchIcon,
   ListIcon,
   PaletteIcon,
   PenLineIcon,
   PenSquareIcon,
+  PresentationIcon,
+  SquareMousePointerIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -17,10 +20,39 @@ export type SlashCommand = {
   description: string;
   icon: ReactNode;
   action: string;
+  prompt?: string;
+  toPrompt?: (input: string) => string;
   shortcut?: string;
 };
 
 export const slashCommands: SlashCommand[] = [
+  {
+    name: "deepresearch",
+    description: "Deep Researchで調査する",
+    icon: <FileSearchIcon className="size-3.5" />,
+    action: "prompt",
+    prompt: "/deepresearch ",
+    toPrompt: (input) =>
+      `Deep Researchを使って、以下について調査してください。最初にリサーチ計画を作成し、その後に5件検索して次の5クエリを生成する流れを最大5回繰り返してください。\n\n${input}`,
+  },
+  {
+    name: "browser",
+    description: "Browserbaseでブラウザ操作する",
+    icon: <SquareMousePointerIcon className="size-3.5" />,
+    action: "prompt",
+    prompt: "/browser ",
+    toPrompt: (input) =>
+      `Browserbaseのブラウザ操作ツールを使って、以下を実行してください。操作中は右側にライブビューを表示してください。\n\n${input}`,
+  },
+  {
+    name: "slides",
+    description: "スライドを生成する",
+    icon: <PresentationIcon className="size-3.5" />,
+    action: "prompt",
+    prompt: "/slides ",
+    toPrompt: (input) =>
+      `以下の内容でスライド資料を作成してください。createDocumentを使い、kindは必ずpresentationにしてください。\n\n${input}`,
+  },
   {
     name: "new",
     description: "Start a new chat",
