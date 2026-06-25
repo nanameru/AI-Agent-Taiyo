@@ -7,7 +7,10 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { useBrowserPanel } from "@/hooks/use-browser-panel";
+import {
+  type BrowserPanelData,
+  useBrowserPanel,
+} from "@/hooks/use-browser-panel";
 import { Button } from "../ui/button";
 
 export function BrowserPanel() {
@@ -89,7 +92,7 @@ export function BrowserPanel() {
 function ResearchPanelContent({
   research,
 }: {
-  research: ReturnType<typeof useBrowserPanel>["browserPanel"]["research"];
+  research: BrowserPanelData["research"];
 }) {
   const rounds = research?.rounds ?? [];
   const plan = research?.plan;
@@ -148,90 +151,173 @@ function ResearchPanelContent({
           </div>
         )}
 
-        {rounds.map((round) => (
-          <section className="rounded-lg border bg-card p-5" key={round.round}>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 font-semibold text-sm">
-                <SearchIcon className="size-4" />
-                Round {round.round}
-              </div>
-              <div className="text-muted-foreground text-xs">
-                {round.searches?.reduce(
-                  (sum, search) => sum + (search.results?.length ?? 0),
-                  0
-                ) ?? 0}{" "}
-                sources
-              </div>
+        {rounds.length > 0 && (
+          <div className="rounded-lg border bg-card p-5 shadow-sm">
+            <div className="mb-5 flex items-center gap-2 font-semibold text-base">
+              <SearchIcon className="size-4" />
+              Show thinking
             </div>
+            <div className="space-y-8">
+              {rounds.map((round) => (
+                <ResearchRoundSet key={round.round} round={round} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              {(round.queries ?? []).map((query) => (
+type ResearchRound = NonNullable<
+  NonNullable<BrowserPanelData["research"]>["rounds"]
+>[number];
+
+function ResearchRoundSet({ round }: { round: ResearchRound }) {
+  const sources = getRoundSources(round);
+  const failedSearches = (round.searches ?? []).filter(
+    (search) => search.error
+  );
+  const featuredSources = sources.slice(0, 3);
+
+  return (
+    <section className="relative pl-10">
+      <div className="-left-px absolute top-8 bottom-0 w-px bg-border" />
+      <div className="absolute top-0 left-0 flex size-8 items-center justify-center rounded-full border bg-background">
+        <SearchIcon className="size-4 text-muted-foreground" />
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <div className="mb-2 font-semibold text-base">
+            Round {round.round}: 検索セットの要約
+          </div>
+          <div className="space-y-3 text-sm leading-7">
+            <p>
+              このセットでは
+              {formatQueryList(round.queries ?? [])}
+              を検索し、{sources.length}件の検索ソースを確認しました。
+            </p>
+            {featuredSources.length > 0 && (
+              <p>
+                主要な候補として
+                {featuredSources
+                  .map((source) => source.title)
+                  .filter(Boolean)
+                  .join("、")}
+                を参照しています。
+              </p>
+            )}
+            {(round.gapsFromInitialQuery ?? []).length > 0 && (
+              <p>
+                不足している観点として
+                {formatQueryList(round.gapsFromInitialQuery ?? [])}
+                が見つかったため、次の検索セットへ引き継ぎます。
+              </p>
+            )}
+          </div>
+        </div>
+
+        {(round.nextQueries ?? []).length > 0 && (
+          <div>
+            <div className="mb-2 text-muted-foreground text-xs">
+              次に生成されたクエリ
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(round.nextQueries ?? []).map((query) => (
                 <span
-                  className="rounded-full border bg-muted/40 px-2 py-1 text-xs"
+                  className="rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
                   key={query}
                 >
                   {query}
                 </span>
               ))}
             </div>
+          </div>
+        )}
 
-            <div className="space-y-3">
-              {(round.searches ?? []).map((search) => (
-                <div
-                  className="rounded-md border bg-background p-3"
-                  key={search.query}
+        {failedSearches.length > 0 && (
+          <div className="space-y-1 rounded-md border border-red-200 bg-red-50 p-3 text-red-700 text-xs dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            {failedSearches.map((search) => (
+              <div key={search.query}>
+                {search.query}: {search.error}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {sources.length > 0 && (
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-muted-foreground text-xs">
+              <ExternalLinkIcon className="size-3.5" />
+              検索ソース
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {sources.slice(0, 10).map((source) => (
+                <a
+                  className="flex min-w-0 items-center gap-2 rounded-full bg-muted px-3 py-2 text-sm transition-colors hover:bg-muted/70"
+                  href={source.url}
+                  key={source.url}
+                  rel="noreferrer"
+                  target="_blank"
+                  title={source.title}
                 >
-                  <div className="mb-2 font-medium text-sm">{search.query}</div>
-                  {search.error ? (
-                    <div className="text-destructive text-xs">
-                      {search.error}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {(search.results ?? []).slice(0, 5).map((result) => (
-                        <a
-                          className="block rounded-md p-2 transition-colors hover:bg-muted/50"
-                          href={result.url}
-                          key={result.url}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          <div className="line-clamp-1 font-medium text-xs">
-                            {result.title}
-                          </div>
-                          {result.description && (
-                            <div className="mt-1 line-clamp-2 text-muted-foreground text-[11px]">
-                              {result.description}
-                            </div>
-                          )}
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-[10px]">
+                    {source.domain.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="truncate text-muted-foreground text-xs">
+                    {source.domain}
+                  </span>
+                  <span className="min-w-0 truncate font-medium">
+                    {source.title}
+                  </span>
+                </a>
               ))}
             </div>
-
-            {(round.nextQueries ?? []).length > 0 && (
-              <div className="mt-4 border-t pt-3">
-                <div className="mb-2 text-muted-foreground text-xs">
-                  Next generated queries
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {(round.nextQueries ?? []).map((query) => (
-                    <span
-                      className="rounded-full bg-primary/10 px-2 py-1 text-primary text-xs"
-                      key={query}
-                    >
-                      {query}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-        ))}
+          </div>
+        )}
       </div>
-    </div>
+    </section>
   );
+}
+
+function getRoundSources(round: ResearchRound) {
+  const seenUrls = new Set<string>();
+  const sources: Array<{ domain: string; title: string; url: string }> = [];
+
+  for (const search of round.searches ?? []) {
+    for (const result of search.results ?? []) {
+      if (!(result.url && result.title) || seenUrls.has(result.url)) {
+        continue;
+      }
+
+      seenUrls.add(result.url);
+      sources.push({
+        domain: getDomain(result.url),
+        title: result.title,
+        url: result.url,
+      });
+    }
+  }
+
+  return sources;
+}
+
+function getDomain(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "source";
+  }
+}
+
+function formatQueryList(queries: string[]) {
+  if (queries.length === 0) {
+    return "関連クエリ";
+  }
+
+  return queries
+    .slice(0, 5)
+    .map((query) => `「${query}」`)
+    .join("、");
 }
