@@ -1,7 +1,14 @@
 "use client";
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { ExternalLinkIcon, MonitorIcon, ShoppingBagIcon } from "lucide-react";
+import {
+  ExternalLinkIcon,
+  Maximize2Icon,
+  MonitorIcon,
+  ShoppingBagIcon,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useBrowserPanel } from "@/hooks/use-browser-panel";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
@@ -44,10 +51,147 @@ type UniqloToolOutput = {
   purchaseBoundary?: string;
 };
 
+type BrowserbaseLiveSessionResponse =
+  | { status: "pending" }
+  | {
+      status: "ready";
+      session: {
+        title: string;
+        liveViewUrl: string;
+        sessionId?: string;
+        sourceUrl?: string;
+        status?: string;
+        timeoutSeconds?: number;
+      };
+    };
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
+function BrowserbaseRunningPreview({ toolCallId }: { toolCallId: string }) {
+  const { setBrowserPanel } = useBrowserPanel();
+  const [liveSession, setLiveSession] = useState<
+    | Extract<BrowserbaseLiveSessionResponse, { status: "ready" }>["session"]
+    | null
+  >(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+
+    const openLiveSession = (
+      session: Extract<
+        BrowserbaseLiveSessionResponse,
+        { status: "ready" }
+      >["session"]
+    ) => {
+      setLiveSession(session);
+      setBrowserPanel({
+        isVisible: true,
+        liveViewUrl: session.liveViewUrl,
+        sessionId: session.sessionId,
+        sourceUrl: session.sourceUrl,
+        status: session.status,
+        timeoutSeconds: session.timeoutSeconds,
+        title: session.title,
+      });
+    };
+
+    const poll = async () => {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/browserbase/live-session/${encodeURIComponent(toolCallId)}`,
+        { cache: "no-store" }
+      ).catch(() => null);
+
+      if (!response || response.status === 202) {
+        return false;
+      }
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const body = (await response.json()) as BrowserbaseLiveSessionResponse;
+
+      if (body.status !== "ready" || !isMounted) {
+        return false;
+      }
+
+      openLiveSession(body.session);
+      return true;
+    };
+
+    poll().then((isReady) => {
+      if (isReady || !isMounted) {
+        return;
+      }
+
+      intervalId = setInterval(() => {
+        poll().then((ready) => {
+          if (ready && intervalId) {
+            clearInterval(intervalId);
+          }
+        });
+      }, 1000);
+    });
+
+    return () => {
+      isMounted = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [setBrowserPanel, toolCallId]);
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-3">
+      <div className="mb-2 flex items-center gap-2 font-medium text-sm">
+        <MonitorIcon className="size-4" />
+        Browserbaseブラウザ操作
+      </div>
+      <p className="mb-3 text-muted-foreground text-xs">
+        遠隔ブラウザを起動しています。準備でき次第、右側にライブ画面を表示します。
+      </p>
+      {liveSession ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() =>
+              setBrowserPanel({
+                isVisible: true,
+                liveViewUrl: liveSession.liveViewUrl,
+                sessionId: liveSession.sessionId,
+                sourceUrl: liveSession.sourceUrl,
+                status: liveSession.status,
+                timeoutSeconds: liveSession.timeoutSeconds,
+                title: liveSession.title,
+              })
+            }
+            size="sm"
+            type="button"
+          >
+            右側で表示
+            <Maximize2Icon className="size-3.5" />
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <a href={liveSession.liveViewUrl} rel="noreferrer" target="_blank">
+              新規タブ
+              <ExternalLinkIcon className="size-3.5" />
+            </a>
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-muted-foreground text-xs">
+          <span className="size-2 animate-pulse rounded-full bg-blue-500" />
+          Live View URLを待機中
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UniqloToolResult({ result }: { result: unknown }) {
+  const { setBrowserPanel } = useBrowserPanel();
+
   if (!isRecord(result)) {
     return <ToolOutput errorText={undefined} output={result} />;
   }
@@ -56,6 +200,21 @@ function UniqloToolResult({ result }: { result: unknown }) {
   const liveViewUrl =
     output.browserbase?.liveViewUrl ?? output.browserbase?.debuggerUrl;
   const products = output.products ?? [];
+  const openBrowserPanel = () => {
+    if (!liveViewUrl) {
+      return;
+    }
+
+    setBrowserPanel({
+      isVisible: true,
+      liveViewUrl,
+      sessionId: output.browserbase?.sessionId,
+      sourceUrl: output.searchUrl,
+      status: output.status,
+      timeoutSeconds: output.browserbase?.timeoutSeconds,
+      title: "UNIQLO Browserbase Live View",
+    });
+  };
 
   return (
     <ToolOutput
@@ -75,19 +234,25 @@ function UniqloToolResult({ result }: { result: unknown }) {
             <div className="rounded-md border bg-muted/30 p-3">
               <div className="mb-2 flex items-center gap-2 font-medium text-sm">
                 <MonitorIcon className="size-4" />
-                Browserbaseライブビュー
+                Browserbaseブラウザ操作
               </div>
               <p className="mb-3 text-muted-foreground text-xs">
-                遠隔ブラウザの操作画面をリアルタイムで確認できます。
+                遠隔ブラウザの画面をリアルタイムで確認できます。
                 セッションは最大{output.browserbase?.timeoutSeconds ?? 600}
                 秒で終了します。
               </p>
-              <Button asChild size="sm" variant="outline">
-                <a href={liveViewUrl} rel="noreferrer" target="_blank">
-                  ライブビューを開く
-                  <ExternalLinkIcon className="size-3.5" />
-                </a>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={openBrowserPanel} size="sm" type="button">
+                  右側で表示
+                  <Maximize2Icon className="size-3.5" />
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <a href={liveViewUrl} rel="noreferrer" target="_blank">
+                    新規タブ
+                    <ExternalLinkIcon className="size-3.5" />
+                  </a>
+                </Button>
+              </div>
             </div>
           ) : output.browserbase?.debugError ? (
             <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-900 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-100">
@@ -453,7 +618,12 @@ const PurePreviewMessage = ({
           <ToolContent>
             {(state === "input-available" ||
               state === "approval-requested") && (
-              <ToolInput input={part.input} />
+              <>
+                <ToolInput input={part.input} />
+                {state === "input-available" && (
+                  <BrowserbaseRunningPreview toolCallId={toolCallId} />
+                )}
+              </>
             )}
             {state === "output-available" && (
               <UniqloToolResult result={part.output} />

@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { z } from "zod";
+import { setBrowserbaseLiveSession } from "@/lib/browserbase/live-sessions";
 
 const browserbaseSessionsUrl = "https://api.browserbase.com/v1/sessions";
 const browserbaseSessionTimeoutSeconds = 600;
@@ -359,7 +360,10 @@ export const shopUniqlo = tool({
       .describe("Number of product candidates to return.")
       .default(3),
   }),
-  execute: async ({ query, region, size, gender, maxPrice, maxResults }) => {
+  execute: async (
+    { query, region, size, gender, maxPrice, maxResults },
+    { toolCallId }
+  ) => {
     const apiKey = process.env.BROWSERBASE_API_KEY;
     const selectedRegion = uniqloRegions[region];
     const searchQuery = query?.trim() || selectedRegion.defaultQuery;
@@ -438,6 +442,17 @@ export const shopUniqlo = tool({
           keepAlive: true,
           timeoutSeconds: browserbaseSessionTimeoutSeconds,
         };
+
+    if ("liveViewUrl" in browserbase && browserbase.liveViewUrl) {
+      setBrowserbaseLiveSession(toolCallId, {
+        liveViewUrl: browserbase.liveViewUrl,
+        sessionId: browserbase.sessionId,
+        sourceUrl: searchUrl,
+        status: "running",
+        timeoutSeconds: browserbase.timeoutSeconds,
+        title: "UNIQLO Browserbase Live View",
+      });
+    }
 
     let browser: Browser | undefined;
 
