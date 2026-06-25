@@ -1,5 +1,7 @@
 "use client";
 import type { UseChatHelpers } from "@ai-sdk/react";
+import { ExternalLinkIcon, MonitorIcon, ShoppingBagIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
@@ -20,6 +22,139 @@ import { MessageActions } from "./message-actions";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
 import { Weather } from "./weather";
+
+type UniqloToolOutput = {
+  status?: string;
+  message?: string;
+  browserbase?: {
+    sessionId?: string;
+    liveViewUrl?: string;
+    debuggerUrl?: string;
+    debugError?: string;
+    keepAlive?: boolean;
+    timeoutSeconds?: number;
+  };
+  products?: Array<{
+    name?: string;
+    price?: string;
+    url?: string;
+    reason?: string;
+  }>;
+  searchUrl?: string;
+  purchaseBoundary?: string;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+function UniqloToolResult({ result }: { result: unknown }) {
+  if (!isRecord(result)) {
+    return <ToolOutput errorText={undefined} output={result} />;
+  }
+
+  const output = result as UniqloToolOutput;
+  const liveViewUrl =
+    output.browserbase?.liveViewUrl ?? output.browserbase?.debuggerUrl;
+  const products = output.products ?? [];
+
+  return (
+    <ToolOutput
+      errorText={undefined}
+      output={
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="font-medium text-sm">
+              {output.status ?? "UNIQLO search result"}
+            </div>
+            {output.message && (
+              <p className="text-muted-foreground text-xs">{output.message}</p>
+            )}
+          </div>
+
+          {liveViewUrl ? (
+            <div className="rounded-md border bg-muted/30 p-3">
+              <div className="mb-2 flex items-center gap-2 font-medium text-sm">
+                <MonitorIcon className="size-4" />
+                Browserbaseライブビュー
+              </div>
+              <p className="mb-3 text-muted-foreground text-xs">
+                遠隔ブラウザの操作画面をリアルタイムで確認できます。
+                セッションは最大{output.browserbase?.timeoutSeconds ?? 600}
+                秒で終了します。
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <a href={liveViewUrl} rel="noreferrer" target="_blank">
+                  ライブビューを開く
+                  <ExternalLinkIcon className="size-3.5" />
+                </a>
+              </Button>
+            </div>
+          ) : output.browserbase?.debugError ? (
+            <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-900 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-100">
+              BrowserbaseライブビューURLを取得できませんでした:{" "}
+              {output.browserbase.debugError}
+            </div>
+          ) : null}
+
+          {products.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 font-medium text-sm">
+                <ShoppingBagIcon className="size-4" />
+                商品候補
+              </div>
+              <div className="space-y-2">
+                {products.map((product) => (
+                  <div
+                    className="rounded-md border bg-background p-3"
+                    key={`${product.name}-${product.url}`}
+                  >
+                    <div className="font-medium text-sm">
+                      {product.name ?? "UNIQLO product"}
+                    </div>
+                    <div className="mt-1 text-muted-foreground text-xs">
+                      {[product.price, product.reason]
+                        .filter(Boolean)
+                        .join(" / ")}
+                    </div>
+                    {product.url && (
+                      <a
+                        className="mt-2 inline-flex items-center gap-1 text-primary text-xs underline-offset-4 hover:underline"
+                        href={product.url}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        商品ページを開く
+                        <ExternalLinkIcon className="size-3" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {output.searchUrl && (
+            <a
+              className="inline-flex items-center gap-1 text-muted-foreground text-xs underline-offset-4 hover:underline"
+              href={output.searchUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              UNIQLO検索ページを開く
+              <ExternalLinkIcon className="size-3" />
+            </a>
+          )}
+
+          {output.purchaseBoundary && (
+            <p className="text-muted-foreground text-xs">
+              {output.purchaseBoundary}
+            </p>
+          )}
+        </div>
+      }
+    />
+  );
+}
 
 const PurePreviewMessage = ({
   addToolApprovalResponse,
@@ -321,7 +456,7 @@ const PurePreviewMessage = ({
               <ToolInput input={part.input} />
             )}
             {state === "output-available" && (
-              <ToolOutput errorText={undefined} output={part.output} />
+              <UniqloToolResult result={part.output} />
             )}
             {state === "output-error" && (
               <ToolOutput errorText={part.errorText} output={undefined} />

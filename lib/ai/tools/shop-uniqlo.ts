@@ -3,6 +3,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 import { z } from "zod";
 
 const browserbaseSessionsUrl = "https://api.browserbase.com/v1/sessions";
+const browserbaseSessionTimeoutSeconds = 600;
 
 const uniqloRegions = {
   jp: {
@@ -24,6 +25,19 @@ type UniqloRegion = keyof typeof uniqloRegions;
 type BrowserbaseSession = {
   id?: string;
   connectUrl?: string;
+};
+
+type BrowserbaseLiveViewLinks = {
+  debuggerFullscreenUrl?: string;
+  debuggerUrl?: string;
+  wsUrl?: string;
+  pages?: Array<{
+    id?: string;
+    url?: string;
+    title?: string;
+    debuggerUrl?: string;
+    debuggerFullscreenUrl?: string;
+  }>;
 };
 
 export type UniqloProductCandidate = {
@@ -158,9 +172,17 @@ async function createBrowserbaseSession(apiKey: string) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-bb-api-key": apiKey,
+      "X-BB-API-Key": apiKey,
     },
-    body: JSON.stringify({ proxies: true }),
+    body: JSON.stringify({
+      keepAlive: true,
+      proxies: true,
+      timeout: browserbaseSessionTimeoutSeconds,
+      userMetadata: {
+        app: "ai-agent-taiyo",
+        tool: "shopUniqlo",
+      },
+    }),
   });
 
   if (!response.ok) {
@@ -171,6 +193,36 @@ async function createBrowserbaseSession(apiKey: string) {
 
   return {
     session: (await response.json()) as BrowserbaseSession,
+  };
+}
+
+async function getBrowserbaseLiveViewLinks(
+  session: BrowserbaseSession,
+  apiKey: string
+) {
+  if (!session.id) {
+    return {
+      error: "Browserbase session response did not include an id.",
+    };
+  }
+
+  const response = await fetch(
+    `${browserbaseSessionsUrl}/${session.id}/debug`,
+    {
+      headers: {
+        "X-BB-API-Key": apiKey,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    return {
+      error: `Browserbase live view URL request failed: ${response.status} ${response.statusText}`,
+    };
+  }
+
+  return {
+    links: (await response.json()) as BrowserbaseLiveViewLinks,
   };
 }
 
@@ -279,7 +331,7 @@ async function extractProductLinksFromHtml(searchUrl: string) {
 
 export const shopUniqlo = tool({
   description:
-    "Use Browserbase to search UNIQLO for a white T-shirt and return product candidates. This tool must not log in, pay, place an order, or click final purchase/checkout confirmation buttons.",
+    "Use Browserbase to search UNIQLO for a white T-shirt, expose a Browserbase live view URL, and return product candidates. This tool must not log in, pay, place an order, or click final purchase/checkout confirmation buttons.",
   inputSchema: z.object({
     query: z
       .string()
@@ -363,11 +415,35 @@ export const shopUniqlo = tool({
       };
     }
 
+    const browserbaseSession = sessionResult.session;
+    const liveViewResult = await getBrowserbaseLiveViewLinks(
+      browserbaseSession,
+      apiKey
+    );
+    const liveViewLinks =
+      "links" in liveViewResult ? liveViewResult.links : undefined;
+    const browserbase = liveViewLinks
+      ? {
+          sessionId: browserbaseSession.id,
+          liveViewUrl:
+            liveViewLinks.debuggerFullscreenUrl ?? liveViewLinks.debuggerUrl,
+          debuggerUrl: liveViewLinks.debuggerUrl,
+          pages: liveViewLinks.pages,
+          keepAlive: true,
+          timeoutSeconds: browserbaseSessionTimeoutSeconds,
+        }
+      : {
+          sessionId: browserbaseSession.id,
+          debugError: liveViewResult.error,
+          keepAlive: true,
+          timeoutSeconds: browserbaseSessionTimeoutSeconds,
+        };
+
     let browser: Browser | undefined;
 
     try {
       browser = await chromium.connectOverCDP(
-        getConnectUrl(sessionResult.session, apiKey)
+        getConnectUrl(browserbaseSession, apiKey)
       );
 
       const context = browser.contexts()[0] ?? (await browser.newContext());
@@ -391,6 +467,7 @@ export const shopUniqlo = tool({
 
       return {
         status: products.length > 0 ? "candidates_found" : "no_candidates",
+        browserbase,
         region,
         regionLabel: selectedRegion.label,
         currency: selectedRegion.currency,
@@ -406,6 +483,7 @@ export const shopUniqlo = tool({
     } catch (error) {
       return {
         status: "automation_error",
+        browserbase,
         message:
           error instanceof Error
             ? error.message
