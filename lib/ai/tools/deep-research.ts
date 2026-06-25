@@ -6,6 +6,7 @@ const DEFAULT_MAX_ROUNDS = 5;
 const DEFAULT_PARALLEL_SEARCHES = 5;
 const DEFAULT_RESULTS_PER_QUERY = 5;
 const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_SPACING_MS = 1500;
 
 const STOP_WORDS = new Set([
   "about",
@@ -62,6 +63,18 @@ type BraveSearchResponse = {
   };
 };
 
+type BraveErrorResponse = {
+  error?: {
+    detail?: string;
+    meta?: {
+      errors?: Array<{
+        loc?: string[];
+        msg?: string;
+      }>;
+    };
+  };
+};
+
 type ResearchResult = {
   title: string;
   url: string;
@@ -74,6 +87,7 @@ type SearchExecution = {
   query: string;
   results: ResearchResult[];
   error?: string;
+  isRateLimited?: boolean;
 };
 
 type ResearchRound = {
@@ -86,6 +100,61 @@ type ResearchRound = {
 
 function getBraveSearchApiKey() {
   return process.env.BRAVE_SEARCH_API_KEY ?? process.env.BRAVE_API_KEY;
+}
+
+function readPositiveInteger(value: string | undefined, fallback: number) {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max));
+}
+
+function normalizeCountry(value?: string) {
+  const normalized = value?.trim().toLowerCase();
+
+  if (!normalized || !/^[a-z]{2}$/.test(normalized)) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function normalizeSearchLanguage(value?: string) {
+  const normalized = value?.trim().toLowerCase().replace("_", "-");
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  const languageAliases: Record<string, string> = {
+    ja: "jp",
+    "ja-jp": "jp",
+    "en-us": "en",
+  };
+
+  return languageAliases[normalized] ?? normalized;
+}
+
+async function readBraveErrorMessage(response: Response) {
+  const data = (await response
+    .json()
+    .catch(() => null)) as BraveErrorResponse | null;
+  const validationMessage = data?.error?.meta?.errors
+    ?.map((error) =>
+      [error.loc?.join("."), error.msg].filter(Boolean).join(": ")
+    )
+    .filter(Boolean)
+    .join("; ");
+
+  return data?.error?.detail
+    ? [data.error.detail, validationMessage].filter(Boolean).join(" ")
+    : validationMessage;
 }
 
 function stripHtml(value: string) {
@@ -218,16 +287,19 @@ async function braveSearch({
   searchLanguage?: string;
 }) {
   const url = new URL(BRAVE_SEARCH_ENDPOINT);
+  const normalizedCountry = normalizeCountry(country);
+  const normalizedSearchLanguage = normalizeSearchLanguage(searchLanguage);
+
   url.searchParams.set("q", query);
   url.searchParams.set("count", String(count));
   url.searchParams.set("extra_snippets", "true");
 
-  if (country) {
-    url.searchParams.set("country", country);
+  if (normalizedCountry) {
+    url.searchParams.set("country", normalizedCountry);
   }
 
-  if (searchLanguage) {
-    url.searchParams.set("search_lang", searchLanguage);
+  if (normalizedSearchLanguage) {
+    url.searchParams.set("search_lang", normalizedSearchLanguage);
   }
 
   const response = await fetch(url, {
@@ -240,10 +312,19 @@ async function braveSearch({
   });
 
   if (!response.ok) {
+    const isRateLimited = response.status === 429;
+    const errorMessage = isRateLimited
+      ? undefined
+      : await readBraveErrorMessage(response);
     return {
       query,
       results: [],
-      error: `Brave Search returned ${response.status}`,
+      error: isRateLimited
+        ? "Brave Search rate limit reached. Search was stopped to avoid repeated 429 errors."
+        : `Brave Search returned ${response.status}${
+            errorMessage ? `: ${errorMessage}` : ""
+          }`,
+      isRateLimited,
     } satisfies SearchExecution;
   }
 
@@ -255,9 +336,58 @@ async function braveSearch({
   } satisfies SearchExecution;
 }
 
+async function runSearchesSequentially({
+  apiKey,
+  queries,
+  count,
+  country,
+  searchLanguage,
+}: {
+  apiKey: string;
+  queries: string[];
+  count: number;
+  country?: string;
+  searchLanguage?: string;
+}) {
+  const searches: SearchExecution[] = [];
+
+  for (const [index, roundQuery] of queries.entries()) {
+    if (index > 0) {
+      await new Promise((resolve) => setTimeout(resolve, REQUEST_SPACING_MS));
+    }
+
+    try {
+      const search = await braveSearch({
+        apiKey,
+        query: roundQuery,
+        count,
+        country,
+        searchLanguage,
+      });
+
+      searches.push(search);
+
+      if (search.isRateLimited) {
+        break;
+      }
+    } catch (error) {
+      searches.push({
+        query: roundQuery,
+        results: [],
+        error:
+          error instanceof Error
+            ? error.message
+            : "Brave Search request failed",
+      });
+    }
+  }
+
+  return searches;
+}
+
 export const deepResearch = tool({
   description:
-    "Run iterative deep research with Brave Search. Use this when the user asks for web search, latest/current information, research, source discovery, or broad investigation. It searches up to 5 queries in parallel per round, compares results against the initial query, creates follow-up queries from uncovered terms, and repeats for up to 5 rounds.",
+    "Run conservative web research with Brave Search. Use this when the user asks for web search, latest/current information, research, source discovery, or broad investigation. To avoid Brave Search rate limits, the app serializes requests and caps the number of searches unless explicitly configured by environment variables.",
   inputSchema: z.object({
     query: z.string().min(1).describe("The user's original research query."),
     maxRounds: z
@@ -266,14 +396,18 @@ export const deepResearch = tool({
       .min(1)
       .max(5)
       .default(DEFAULT_MAX_ROUNDS)
-      .describe("Maximum iterative research rounds. Hard-capped at 5."),
+      .describe(
+        "Maximum iterative research rounds. The app may lower this to avoid search rate limits."
+      ),
     parallelSearches: z
       .number()
       .int()
       .min(1)
       .max(5)
       .default(DEFAULT_PARALLEL_SEARCHES)
-      .describe("Maximum Brave Search queries to run in parallel per round."),
+      .describe(
+        "Maximum Brave Search queries per round. The app runs them sequentially and may lower this to avoid rate limits."
+      ),
     resultsPerQuery: z
       .number()
       .int()
@@ -291,20 +425,13 @@ export const deepResearch = tool({
     searchLanguage: z
       .string()
       .min(2)
-      .max(5)
+      .max(10)
       .optional()
       .describe(
-        "Optional search language code for Brave Search, e.g. en or ja."
+        "Optional search language code. Japanese values like ja or ja-JP are normalized to Brave Search's jp code."
       ),
   }),
-  execute: async ({
-    query,
-    maxRounds,
-    parallelSearches,
-    resultsPerQuery,
-    country,
-    searchLanguage,
-  }) => {
+  execute: async ({ query, country, searchLanguage }) => {
     const apiKey = getBraveSearchApiKey();
 
     if (!apiKey) {
@@ -317,12 +444,35 @@ export const deepResearch = tool({
     const searchedQueries = new Set<string>();
     const seenUrls = new Set<string>();
     const rounds: ResearchRound[] = [];
-    let currentQueries = candidateSearchQueries(query, parallelSearches);
+    const maxConfiguredRounds = clamp(
+      readPositiveInteger(
+        process.env.DEEP_RESEARCH_MAX_ROUNDS,
+        DEFAULT_MAX_ROUNDS
+      ),
+      1,
+      5
+    );
+    const maxConfiguredSearchesPerRound = clamp(
+      readPositiveInteger(
+        process.env.DEEP_RESEARCH_SEARCHES_PER_ROUND,
+        DEFAULT_PARALLEL_SEARCHES
+      ),
+      1,
+      5
+    );
+    const effectiveMaxRounds = maxConfiguredRounds;
+    const effectiveSearchesPerRound = maxConfiguredSearchesPerRound;
+    const effectiveResultsPerQuery = DEFAULT_RESULTS_PER_QUERY;
+    let currentQueries = candidateSearchQueries(
+      query,
+      effectiveSearchesPerRound
+    );
     let latestGaps: string[] = [];
+    let stoppedByRateLimit = false;
 
     for (
       let round = 1;
-      round <= maxRounds && currentQueries.length > 0;
+      round <= effectiveMaxRounds && currentQueries.length > 0;
       round++
     ) {
       const roundQueries = currentQueries
@@ -336,34 +486,20 @@ export const deepResearch = tool({
           searchedQueries.add(normalized);
           return true;
         })
-        .slice(0, parallelSearches);
+        .slice(0, effectiveSearchesPerRound);
 
       if (roundQueries.length === 0) {
         break;
       }
 
-      const searches = await Promise.all(
-        roundQueries.map(async (roundQuery) => {
-          try {
-            return await braveSearch({
-              apiKey,
-              query: roundQuery,
-              count: resultsPerQuery,
-              country,
-              searchLanguage,
-            });
-          } catch (error) {
-            return {
-              query: roundQuery,
-              results: [],
-              error:
-                error instanceof Error
-                  ? error.message
-                  : "Brave Search request failed",
-            } satisfies SearchExecution;
-          }
-        })
-      );
+      const searches = await runSearchesSequentially({
+        apiKey,
+        queries: roundQueries,
+        count: effectiveResultsPerQuery,
+        country,
+        searchLanguage,
+      });
+      stoppedByRateLimit = searches.some((search) => search.isRateLimited);
 
       const newResults = searches.flatMap((search) =>
         search.results.filter((result) => {
@@ -380,7 +516,7 @@ export const deepResearch = tool({
         query,
         latestGaps,
         searchedQueries,
-        parallelSearches
+        effectiveSearchesPerRound
       );
 
       rounds.push({
@@ -390,6 +526,10 @@ export const deepResearch = tool({
         gapsFromInitialQuery: latestGaps,
         nextQueries,
       });
+
+      if (stoppedByRateLimit) {
+        break;
+      }
 
       currentQueries = nextQueries;
     }
@@ -401,6 +541,7 @@ export const deepResearch = tool({
         totalRounds: rounds.length,
         totalSearches: searchedQueries.size,
         totalUniqueResults: seenUrls.size,
+        stoppedByRateLimit,
         latestGapsFromInitialQuery: latestGaps,
         suggestedFollowUpQueries:
           rounds.at(-1)?.nextQueries ??
@@ -408,7 +549,7 @@ export const deepResearch = tool({
             query,
             latestGaps,
             searchedQueries,
-            parallelSearches
+            effectiveSearchesPerRound
           ),
       },
     };

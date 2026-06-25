@@ -5,17 +5,51 @@ import useSWR from "swr";
 
 export type BrowserPanelData = {
   title: string;
-  liveViewUrl: string;
+  liveViewUrl?: string;
   sessionId?: string;
   sourceUrl?: string;
   status?: string;
   timeoutSeconds?: number;
+  mode?: "browser" | "research";
+  research?: {
+    initialQuery?: string;
+    isLoading?: boolean;
+    plan?: {
+      title: string;
+      steps: string[];
+      rounds: number;
+      searchesPerRound: number;
+      resultsPerQuery: number;
+    };
+    rounds?: Array<{
+      round?: number;
+      queries?: string[];
+      searches?: Array<{
+        query?: string;
+        error?: string;
+        results?: Array<{
+          title?: string;
+          url?: string;
+          description?: string;
+          age?: string;
+        }>;
+      }>;
+      gapsFromInitialQuery?: string[];
+      nextQueries?: string[];
+    }>;
+    summary?: {
+      totalRounds?: number;
+      totalSearches?: number;
+      totalUniqueResults?: number;
+      stoppedByRateLimit?: boolean;
+      suggestedFollowUpQueries?: string[];
+    };
+  };
   isVisible: boolean;
 };
 
 export const initialBrowserPanelData: BrowserPanelData = {
   title: "",
-  liveViewUrl: "",
   isVisible: false,
 };
 

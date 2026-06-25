@@ -2,11 +2,13 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import {
   ExternalLinkIcon,
+  GlobeIcon,
   Maximize2Icon,
   MonitorIcon,
+  SearchIcon,
   ShoppingBagIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useBrowserPanel } from "@/hooks/use-browser-panel";
 import type { Vote } from "@/lib/db/schema";
@@ -64,6 +66,55 @@ type BrowserbaseLiveSessionResponse =
         timeoutSeconds?: number;
       };
     };
+
+type DeepResearchToolOutput = {
+  error?: string;
+  initialQuery?: string;
+  rounds?: Array<{
+    round?: number;
+    queries?: string[];
+    searches?: Array<{
+      query?: string;
+      error?: string;
+      results?: Array<{
+        title?: string;
+        url?: string;
+        description?: string;
+        age?: string;
+      }>;
+    }>;
+  }>;
+  summary?: {
+    totalRounds?: number;
+    totalSearches?: number;
+    totalUniqueResults?: number;
+    stoppedByRateLimit?: boolean;
+    suggestedFollowUpQueries?: string[];
+  };
+};
+
+type DeepResearchToolInput = {
+  query?: string;
+  maxRounds?: number;
+  parallelSearches?: number;
+  resultsPerQuery?: number;
+};
+
+function buildResearchPlan(input: DeepResearchToolInput = {}) {
+  return {
+    title: input.query ? `${input.query} のリサーチ計画` : "Deep Research plan",
+    steps: [
+      "リサーチテーマから初期検索クエリを5件作成します。",
+      "各クエリで5件ずつ検索し、重複URLを除外して情報源を集めます。",
+      "検索結果から不足トピックと関連キーワードを抽出します。",
+      "抽出した不足トピックから次ラウンドの5クエリを生成します。",
+      "この流れを最大5ラウンド繰り返し、最後に参照ソースと次の追跡クエリを整理します。",
+    ],
+    rounds: input.maxRounds ?? 5,
+    searchesPerRound: input.parallelSearches ?? 5,
+    resultsPerQuery: input.resultsPerQuery ?? 5,
+  };
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -185,6 +236,241 @@ function BrowserbaseRunningPreview({ toolCallId }: { toolCallId: string }) {
           Live View URLを待機中
         </div>
       )}
+    </div>
+  );
+}
+
+function DeepResearchToolResult({ result }: { result: unknown }) {
+  const { setBrowserPanel } = useBrowserPanel();
+
+  if (!isRecord(result)) {
+    return <ToolOutput errorText={undefined} output={result} />;
+  }
+
+  const output = result as DeepResearchToolOutput;
+  const searches =
+    output.rounds?.flatMap((round) => round.searches ?? []) ?? [];
+  const results = searches
+    .flatMap((search) =>
+      (search.results ?? []).map((item) => ({
+        ...item,
+        query: search.query,
+      }))
+    )
+    .filter((item) => item.url && item.title)
+    .slice(0, 8);
+  const errors = [
+    output.error,
+    ...searches.map((search) => search.error).filter(Boolean),
+  ].filter(Boolean);
+  const openResearchPanel = () => {
+    setBrowserPanel({
+      isVisible: true,
+      mode: "research",
+      title: output.initialQuery
+        ? `${output.initialQuery} のリサーチ`
+        : "Deep Research",
+      research: {
+        initialQuery: output.initialQuery,
+        isLoading: false,
+        plan: buildResearchPlan({
+          query: output.initialQuery,
+          maxRounds: 5,
+          parallelSearches: 5,
+          resultsPerQuery: 5,
+        }),
+        rounds: output.rounds,
+        summary: output.summary,
+      },
+    });
+  };
+
+  return (
+    <ToolOutput
+      errorText={undefined}
+      output={
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-medium text-sm">
+              <SearchIcon className="size-4" />
+              Deep Research
+            </div>
+            {output.initialQuery && (
+              <p className="text-muted-foreground text-xs">
+                検索テーマ: {output.initialQuery}
+              </p>
+            )}
+          </div>
+
+          <Button onClick={openResearchPanel} size="sm" type="button">
+            右側で検索連鎖を表示
+            <Maximize2Icon className="size-3.5" />
+          </Button>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-md border bg-background p-2">
+              <div className="text-muted-foreground text-[11px]">Rounds</div>
+              <div className="font-semibold text-sm">
+                {output.summary?.totalRounds ?? output.rounds?.length ?? 0}
+              </div>
+            </div>
+            <div className="rounded-md border bg-background p-2">
+              <div className="text-muted-foreground text-[11px]">Searches</div>
+              <div className="font-semibold text-sm">
+                {output.summary?.totalSearches ?? searches.length}
+              </div>
+            </div>
+            <div className="rounded-md border bg-background p-2">
+              <div className="text-muted-foreground text-[11px]">Sources</div>
+              <div className="font-semibold text-sm">
+                {output.summary?.totalUniqueResults ?? results.length}
+              </div>
+            </div>
+          </div>
+
+          {output.summary?.stoppedByRateLimit && (
+            <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-900 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-100">
+              Brave Searchのレート制限に到達したため、追加検索を停止しました。
+            </div>
+          )}
+
+          {errors.length > 0 && (
+            <div className="space-y-1 rounded-md border border-red-200 bg-red-50 p-3 text-red-700 text-xs dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+              {errors.map((error) => (
+                <div key={error}>{error}</div>
+              ))}
+            </div>
+          )}
+
+          {searches.length > 0 && (
+            <div className="space-y-2">
+              <div className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                Queries
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {searches.map((search) => (
+                  <span
+                    className="rounded-full border bg-muted/40 px-2 py-1 text-xs"
+                    key={search.query}
+                  >
+                    {search.query}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {results.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 font-medium text-sm">
+                <GlobeIcon className="size-4" />
+                参照ソース
+              </div>
+              <div className="space-y-2">
+                {results.map((result) => (
+                  <a
+                    className="block rounded-md border bg-background p-3 transition-colors hover:bg-muted/40"
+                    href={result.url}
+                    key={result.url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="line-clamp-2 font-medium text-sm">
+                          {result.title}
+                        </div>
+                        {result.description && (
+                          <div className="mt-1 line-clamp-2 text-muted-foreground text-xs">
+                            {result.description}
+                          </div>
+                        )}
+                        <div className="mt-2 truncate text-muted-foreground text-[11px]">
+                          {result.query}
+                        </div>
+                      </div>
+                      <ExternalLinkIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {output.summary?.suggestedFollowUpQueries &&
+            output.summary.suggestedFollowUpQueries.length > 0 && (
+              <div className="space-y-2">
+                <div className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                  Follow-up
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {output.summary.suggestedFollowUpQueries.map((query) => (
+                    <span
+                      className="rounded-full border bg-muted/40 px-2 py-1 text-xs"
+                      key={query}
+                    >
+                      {query}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+        </div>
+      }
+    />
+  );
+}
+
+function DeepResearchPlanPreview({ input }: { input: unknown }) {
+  const { setBrowserPanel } = useBrowserPanel();
+  const parsedInput = isRecord(input) ? (input as DeepResearchToolInput) : {};
+  const query = parsedInput.query;
+  const maxRounds = parsedInput.maxRounds;
+  const parallelSearches = parsedInput.parallelSearches;
+  const resultsPerQuery = parsedInput.resultsPerQuery;
+  const plan = useMemo(
+    () =>
+      buildResearchPlan({
+        query,
+        maxRounds,
+        parallelSearches,
+        resultsPerQuery,
+      }),
+    [query, maxRounds, parallelSearches, resultsPerQuery]
+  );
+
+  useEffect(() => {
+    setBrowserPanel({
+      isVisible: true,
+      mode: "research",
+      title: plan.title,
+      research: {
+        initialQuery: query,
+        isLoading: true,
+        plan,
+        rounds: [],
+      },
+    });
+  }, [query, plan, setBrowserPanel]);
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-3">
+      <div className="mb-2 flex items-center gap-2 font-medium text-sm">
+        <SearchIcon className="size-4" />
+        リサーチ計画
+      </div>
+      <p className="mb-3 text-muted-foreground text-xs">
+        5件検索して、結果から次の5クエリを生成する流れを5回繰り返します。
+        右側パネルで進行を表示しています。
+      </p>
+      <div className="space-y-1.5">
+        {plan.steps.slice(0, 3).map((step) => (
+          <div className="flex gap-2 text-xs" key={step}>
+            <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
+            <span>{step}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -538,6 +824,41 @@ const PurePreviewMessage = ({
           key={toolCallId}
           result={part.output}
         />
+      );
+    }
+
+    if (type === "tool-deepResearch") {
+      const { toolCallId, state } = part;
+
+      return (
+        <Tool
+          className="w-[min(100%,640px)]"
+          defaultOpen={true}
+          key={toolCallId}
+        >
+          <ToolHeader
+            state={state}
+            title="Deep Research"
+            type="tool-deepResearch"
+          />
+          <ToolContent>
+            {(state === "input-available" ||
+              state === "approval-requested") && (
+              <>
+                <ToolInput input={part.input} />
+                {state === "input-available" && (
+                  <DeepResearchPlanPreview input={part.input} />
+                )}
+              </>
+            )}
+            {state === "output-available" && (
+              <DeepResearchToolResult result={part.output} />
+            )}
+            {state === "output-error" && (
+              <ToolOutput errorText={part.errorText} output={undefined} />
+            )}
+          </ToolContent>
+        </Tool>
       );
     }
 
