@@ -7,6 +7,7 @@ type LoginPageProps = {
   searchParams: Promise<{
     config?: string;
     redirectUrl?: string;
+    reset?: string;
   }>;
 };
 
@@ -42,7 +43,7 @@ function AuthCardSkeleton() {
 }
 
 async function LoginContent({ searchParams }: LoginPageProps) {
-  const { config, redirectUrl } = await searchParams;
+  const { config, redirectUrl, reset } = await searchParams;
   const returnTo = getSafeRedirectUrl(redirectUrl);
   const signInHref = `/sign-in?returnTo=${encodeURIComponent(returnTo)}`;
   const registerHref = `/register?redirectUrl=${encodeURIComponent(returnTo)}`;
@@ -63,6 +64,12 @@ async function LoginContent({ searchParams }: LoginPageProps) {
           ローカルで WorkOS ログインを使うには <code>WORKOS_CLIENT_ID</code>、
           <code>WORKOS_API_KEY</code>、<code>WORKOS_COOKIE_PASSWORD</code>、
           <code>NEXT_PUBLIC_WORKOS_REDIRECT_URI</code> を設定してください。
+        </div>
+      )}
+
+      {reset === "1" && (
+        <div className="rounded-lg border border-border bg-muted/40 p-4 text-muted-foreground text-sm leading-6">
+          ローカルのログイン状態をリセットしました。もう一度ログインしてください。
         </div>
       )}
 
@@ -90,6 +97,13 @@ async function LoginContent({ searchParams }: LoginPageProps) {
         <Button asChild className="w-full" size="lg" variant="outline">
           <Link href={registerHref}>会員登録はこちら</Link>
         </Button>
+
+        <Link
+          className="text-center text-muted-foreground text-xs transition-colors hover:text-foreground"
+          href="/reset-auth"
+        >
+          ログインが繰り返される場合はリセット
+        </Link>
       </div>
     </div>
   );
