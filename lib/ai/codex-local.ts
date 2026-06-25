@@ -1,5 +1,6 @@
 import "server-only";
 
+import path from "node:path";
 import { Codex, type SandboxMode } from "@openai/codex-sdk";
 import type { ChatMessage } from "../types";
 import { getTextFromMessage } from "../utils";
@@ -26,19 +27,23 @@ function getCodexSandboxMode(): SandboxMode {
   return DEFAULT_SANDBOX;
 }
 
+function getCodexPathOverride() {
+  return path.join(process.cwd(), "node_modules", ".bin", "codex");
+}
+
 function getCodexEnv() {
-  if (!process.env.CODEX_LOCAL_CODEX_HOME) {
-    return undefined;
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        entry[0] !== "AI_GATEWAY_API_KEY" && typeof entry[1] === "string"
+    )
+  );
+
+  if (process.env.CODEX_LOCAL_CODEX_HOME) {
+    env.CODEX_HOME = process.env.CODEX_LOCAL_CODEX_HOME;
   }
 
-  return {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string"
-      )
-    ),
-    CODEX_HOME: process.env.CODEX_LOCAL_CODEX_HOME,
-  };
+  return env;
 }
 
 function buildCodexPrompt(messages: ChatMessage[]) {
@@ -73,6 +78,7 @@ export async function runCodexLocal(messages: ChatMessage[]) {
   }
 
   const codex = new Codex({
+    codexPathOverride: getCodexPathOverride(),
     env: getCodexEnv(),
   });
   const thread = codex.startThread({

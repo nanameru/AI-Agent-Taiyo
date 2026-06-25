@@ -1,12 +1,11 @@
-export const DEFAULT_CHAT_MODEL = "moonshotai/kimi-k2.5";
 export const CODEX_LOCAL_MODEL_ID = "openai/codex-local";
+export const DEFAULT_CHAT_MODEL = "anthropic/claude-sonnet-4-6";
 
 export const titleModel = {
-  id: "moonshotai/kimi-k2.5",
-  name: "Kimi K2.5",
-  provider: "moonshotai",
+  id: "anthropic/claude-haiku-4-5-20251001",
+  name: "Claude Haiku 4.5",
+  provider: "anthropic",
   description: "Fast model for title generation",
-  gatewayOrder: ["fireworks", "bedrock"],
 };
 
 export type ModelCapabilities = {

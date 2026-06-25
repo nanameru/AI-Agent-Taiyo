@@ -11,6 +11,7 @@ const KNOWN_AUTH_COOKIES = [
   "__Secure-authjs.callback-url",
   "authjs.csrf-token",
   "__Host-authjs.csrf-token",
+  "chat-model",
 ];
 
 function shouldDeleteCookie(name: string) {

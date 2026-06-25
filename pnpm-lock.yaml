@@ -32,6 +32,9 @@ importers:
       '@convex-dev/workos':
         specifier: ^0.0.3
         version: 0.0.3(convex@1.41.0(bufferutil@4.0.9)(react@19.0.1))(react@19.0.1)
+      '@openai/codex':
+        specifier: 0.142.0
+        version: 0.142.0
       '@openai/codex-sdk':
         specifier: ^0.142.0
         version: 0.142.0

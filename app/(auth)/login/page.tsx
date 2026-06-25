@@ -2,9 +2,11 @@ import { ArrowRightIcon, KeyRoundIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
+import { isDevelopmentEnvironment } from "@/lib/constants";
 
 type LoginPageProps = {
   searchParams: Promise<{
+    authError?: string;
     config?: string;
     redirectUrl?: string;
     reset?: string;
@@ -43,10 +45,11 @@ function AuthCardSkeleton() {
 }
 
 async function LoginContent({ searchParams }: LoginPageProps) {
-  const { config, redirectUrl, reset } = await searchParams;
+  const { authError, config, redirectUrl, reset } = await searchParams;
   const returnTo = getSafeRedirectUrl(redirectUrl);
   const signInHref = `/sign-in?returnTo=${encodeURIComponent(returnTo)}`;
   const registerHref = `/register?redirectUrl=${encodeURIComponent(returnTo)}`;
+  const localHref = `/api/auth/guest?redirectUrl=${encodeURIComponent(returnTo)}`;
   const isConfigured = hasWorkOSConfig();
 
   return (
@@ -70,6 +73,13 @@ async function LoginContent({ searchParams }: LoginPageProps) {
       {reset === "1" && (
         <div className="rounded-lg border border-border bg-muted/40 p-4 text-muted-foreground text-sm leading-6">
           ローカルのログイン状態をリセットしました。もう一度ログインしてください。
+        </div>
+      )}
+
+      {authError === "callback" && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm leading-6">
+          ログイン処理に失敗しました。ローカルDBが起動しているか確認し、
+          必要ならログイン状態をリセットして再度ログインしてください。
         </div>
       )}
 
@@ -97,6 +107,12 @@ async function LoginContent({ searchParams }: LoginPageProps) {
         <Button asChild className="w-full" size="lg" variant="outline">
           <Link href={registerHref}>会員登録はこちら</Link>
         </Button>
+
+        {isDevelopmentEnvironment && (
+          <Button asChild className="w-full" size="lg" variant="secondary">
+            <a href={localHref}>ローカルで続行</a>
+          </Button>
+        )}
 
         <Link
           className="text-center text-muted-foreground text-xs transition-colors hover:text-foreground"

@@ -56,12 +56,22 @@ export async function proxy(request: NextRequest) {
     return next();
   }
 
+  const token = await getToken({
+    req: request,
+    secret: process.env.AUTH_SECRET,
+    secureCookie: !isDevelopmentEnvironment,
+  });
+  const isGuest = guestRegex.test(token?.email ?? "");
+  const hasNextAuthSession = Boolean(
+    token && (isDevelopmentEnvironment || !isGuest)
+  );
+
   if (workos) {
-    if (workos.session.user && isAuthPage) {
+    if ((workos.session.user || hasNextAuthSession) && isAuthPage) {
       return redirect(new URL(`${base}/`, request.url));
     }
 
-    if (isProtectedPage && !workos.session.user) {
+    if (isProtectedPage && !(workos.session.user || hasNextAuthSession)) {
       const redirectUrl = encodeURIComponent(
         `${request.nextUrl.pathname}${request.nextUrl.search}`
       );
@@ -77,14 +87,6 @@ export async function proxy(request: NextRequest) {
   if (isApiRoute) {
     return next();
   }
-
-  const token = await getToken({
-    req: request,
-    secret: process.env.AUTH_SECRET,
-    secureCookie: !isDevelopmentEnvironment,
-  });
-
-  const isGuest = guestRegex.test(token?.email ?? "");
 
   if (token && !isGuest && isAuthPage) {
     return redirect(new URL(`${base}/`, request.url));
