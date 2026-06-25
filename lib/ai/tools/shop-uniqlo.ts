@@ -5,6 +5,7 @@ import { setBrowserbaseLiveSession } from "@/lib/browserbase/live-sessions";
 
 const browserbaseSessionsUrl = "https://api.browserbase.com/v1/sessions";
 const browserbaseSessionTimeoutSeconds = 600;
+const browserbaseLivePreviewWarmupMs = 3000;
 
 const uniqloRegions = {
   jp: {
@@ -225,6 +226,10 @@ async function getBrowserbaseLiveViewLinks(
   return {
     links: (await response.json()) as BrowserbaseLiveViewLinks,
   };
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getConnectUrl(session: BrowserbaseSession, apiKey: string) {
@@ -452,6 +457,8 @@ export const shopUniqlo = tool({
         timeoutSeconds: browserbase.timeoutSeconds,
         title: "UNIQLO Browserbase Live View",
       });
+
+      await wait(browserbaseLivePreviewWarmupMs);
     }
 
     let browser: Browser | undefined;
