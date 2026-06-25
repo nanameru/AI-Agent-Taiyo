@@ -219,6 +219,64 @@ function extractProductLinks(page: Page) {
   });
 }
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replaceAll("&quot;", '"')
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&#x27;", "'")
+    .replaceAll("&#39;", "'");
+}
+
+function stripHtml(value: string) {
+  return decodeHtmlEntities(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ");
+}
+
+async function extractProductLinksFromHtml(searchUrl: string) {
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
+    },
+  });
+
+  if (!response.ok) {
+    return {
+      error: `UNIQLO search page request failed: ${response.status} ${response.statusText}`,
+    };
+  }
+
+  const html = await response.text();
+  const links: ExtractedProductLink[] = [];
+  const anchorPattern =
+    /<a\b[^>]*href=(["'])([^"']*(?:\/products\/|\/item\/|\/goods\/)[^"']*)\1[^>]*>([\s\S]*?)<\/a>/gi;
+  let match: RegExpExecArray | null;
+
+  match = anchorPattern.exec(html);
+  while (match && links.length < 80) {
+    const href = decodeHtmlEntities(match[2]);
+    const text = normalizeText(stripHtml(match[3]));
+
+    if (!text) {
+      match = anchorPattern.exec(html);
+      continue;
+    }
+
+    links.push({
+      href: new URL(href, searchUrl).toString(),
+      text,
+    });
+
+    match = anchorPattern.exec(html);
+  }
+
+  return { links };
+}
+
 export const shopUniqlo = tool({
   description:
     "Use Browserbase to search UNIQLO for a white T-shirt and return product candidates. This tool must not log in, pay, place an order, or click final purchase/checkout confirmation buttons.",
@@ -256,11 +314,43 @@ export const shopUniqlo = tool({
     const searchUrl = buildUniqloSearchUrl({ query: searchQuery, region });
 
     if (!apiKey) {
+      const htmlResult = await extractProductLinksFromHtml(searchUrl);
+      if ("error" in htmlResult) {
+        return {
+          status: "configuration_required",
+          message:
+            "BROWSERBASE_API_KEY is not configured, and the fallback UNIQLO HTML search failed.",
+          fallbackError: htmlResult.error,
+          searchUrl,
+        };
+      }
+
+      const products = chooseUniqloProducts({
+        links: htmlResult.links,
+        query: searchQuery,
+        maxResults,
+        size,
+        maxPrice,
+      });
+
       return {
-        status: "configuration_required",
+        status:
+          products.length > 0
+            ? "fallback_candidates_found"
+            : "fallback_no_candidates",
         message:
-          "BROWSERBASE_API_KEY is not configured. Add it to the server environment before using the UNIQLO shopping tool.",
+          "BROWSERBASE_API_KEY is not configured, so this used UNIQLO's public search HTML as a fallback.",
+        region,
+        regionLabel: selectedRegion.label,
+        currency: selectedRegion.currency,
+        query: searchQuery,
+        gender,
+        size,
+        maxPrice,
         searchUrl,
+        products,
+        purchaseBoundary:
+          "候補検索まで完了しました。ログイン、配送先入力、支払い、注文確定はユーザーがUNIQLO上で確認して実行してください。",
       };
     }
 

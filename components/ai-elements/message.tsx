@@ -2,6 +2,7 @@
 
 import type { UIMessage } from "ai";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,7 @@ import {
   useState,
 } from "react";
 import { Streamdown } from "streamdown";
+import type { LinkSafetyModalProps } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -322,6 +324,103 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
+function StreamdownLinkSafetyModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  url,
+}: LinkSafetyModalProps) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setCopied(false);
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  const copyLink = async () => {
+    await navigator.clipboard?.writeText(url);
+    setCopied(true);
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+      data-streamdown="link-safety-modal"
+      onClick={onClose}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          onClose();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+    >
+      <div
+        className="relative flex w-full max-w-lg flex-col gap-4 rounded-xl border border-border bg-background p-5 shadow-lg"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+        role="presentation"
+      >
+        <button
+          className="absolute top-3 right-3 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={onClose}
+          type="button"
+        >
+          Close
+        </button>
+        <div className="flex flex-col gap-1 pr-10">
+          <div className="font-semibold text-lg">Open external link?</div>
+          <p className="text-muted-foreground text-sm">
+            You're about to visit an external website.
+          </p>
+        </div>
+        <div className="max-h-32 overflow-y-auto break-all rounded-md bg-muted p-3 font-mono text-sm">
+          {url}
+        </div>
+        <div className="flex gap-2">
+          <button
+            className="flex flex-1 items-center justify-center rounded-md border bg-background px-4 py-2 font-medium text-sm transition-colors hover:bg-muted"
+            onClick={copyLink}
+            type="button"
+          >
+            {copied ? "Copied" : "Copy link"}
+          </button>
+          <button
+            className="flex flex-1 items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm transition-colors hover:bg-primary/90"
+            onClick={onConfirm}
+            type="button"
+          >
+            Open link
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+const linkSafety = {
+  enabled: true,
+  renderModal: (props: LinkSafetyModalProps) => (
+    <StreamdownLinkSafetyModal {...props} />
+  ),
+};
+
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
     <Streamdown
@@ -329,6 +428,7 @@ export const MessageResponse = memo(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
+      linkSafety={linkSafety}
       plugins={streamdownPlugins}
       {...props}
     />
